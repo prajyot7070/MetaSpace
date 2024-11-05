@@ -37,14 +37,24 @@ const PhaserGame: React.FC = () => {
   let player: Phaser.Physics.Arcade.Sprite;
   let cursors: Phaser.Types.Input.Keyboard.CursorKeys;
 
+  //MetaSpaceM1
+
   function preload(this: Phaser.Scene) {
     // Load a simple character sprite; replace with your asset path
-    this.load.image('character', '../../public/test_sprite.png');
+    this.load.image('character', '../../public/Modern_Interiors_Free_v2.2/Modern tiles_Free/Characters_free/Bob_idle_16x16.png');
+    this.load.tilemapTiledJSON('map','../../public/MetaSpaceM1.json');
+    this.load.image('tiles', '../../public/MetaSpaceM1.png');
   }
 
   function create(this: Phaser.Scene) {
     // Create the player sprite at the center of the screen
-    player = this.physics.add.sprite(400, 300, 'character');
+    //const map = this.make.tilemap({key: 'map'});
+    //const tileset = map.addTilesetImage('Furniture', 'tiles'); 
+    //const groundlayer = map.createLayer('Ground', tileset);
+    this.add.image(300,600,'tiles');
+    
+    player = this.physics.add.sprite(400, 300, 'character','4');
+    player.setScale(3);
 
     // Enable cursor key input
     cursors = this.input.keyboard.createCursorKeys();
