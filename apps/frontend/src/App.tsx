@@ -1,20 +1,19 @@
 import './App.css'
-import { Dashboard } from './pages/dashboard'
-import { Home } from './pages/home'
-import {BrowserRouter, Route, Routes} from 'react-router-dom'
 
-function App() {
-
+// App.tsx
+import { Routes, Route } from "react-router-dom";
+import { LandingPage } from "./pages/LandingPage";
+import { Dashboard } from "./pages/Dashboard";
+import Callback from './pages/Callback';
+const App = () => {
   return (
-    <>
-    <BrowserRouter>
     <Routes>
-      <Route path='/dashboard' element={<Dashboard />} />
-      <Route path='/' element={<Home />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/callback" element={<Callback />} />
     </Routes>
-    </BrowserRouter>
-   </>
-  )
-}
+  );
+};
 
-export default App
+export default App;
+
