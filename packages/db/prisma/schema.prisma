@@ -12,3 +12,36 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id       String  @id @unique @default(cuid())
+  username String  @unique
+  password String?  @unique
+  profilePicture String?
+  email    String  @unique
+  role     Role
+  spaces   Space[] 
+  }
+
+model Space {
+  id        String  @id @unique @default(cuid())
+  name      String
+  width     Int
+  height    Int?
+  thumbnail String?
+  creatorId String
+  creator   User    @relation(fields: [creatorId], references: [id])
+
+}
+
+model Map {
+  id     String  @id @unique @default(cuid())
+  width  Int
+  height Int
+  name   String
+}
+
+enum Role {
+  Admin
+  User
+}

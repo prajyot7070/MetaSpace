@@ -14,6 +14,10 @@ spaceRouter.post('/create-space', (req, res) => {
   //create a new space
   res.json({msg: "newwww space created"});
 })
+//Delete your own space
+spaceRouter.delete('/:spaceId', (req, res) => {
+
+})
 
 // Join the space
 spaceRouter.get('/join', (req, res) => {

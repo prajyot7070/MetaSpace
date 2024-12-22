@@ -1,12 +1,11 @@
 
 // pages/Dashboard.tsx
 import { useAuth0 } from "@auth0/auth0-react";
-
 export const Dashboard = () => {
   const { user, logout, isAuthenticated } = useAuth0();
 
   const handleLogout = () => {
-    logout({ returnTo: window.location.origin }); // Redirect after logout
+    logout({logoutParams: { returnTo: window.location.origin }}); // Redirect after logout
   };
 
   if (!isAuthenticated) {

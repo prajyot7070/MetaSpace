@@ -1,5 +1,5 @@
 {
-  "name": "db",
+  "name": "@metaSpace/db",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -8,5 +8,10 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^6.1.0",
+    "package.json": "^2.0.1",
+    "prisma": "^6.1.0"
+  }
 }
