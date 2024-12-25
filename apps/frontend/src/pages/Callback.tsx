@@ -29,6 +29,8 @@ const Callback = () => {
           }
         }  catch (error) {
           console.error('Error sending user data:', error);
+        } finally {
+          navigate('/dashboard');
         }
       }
     };

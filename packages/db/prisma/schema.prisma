@@ -14,14 +14,23 @@ datasource db {
 }
 
 model User {
-  id       String  @id @unique @default(cuid())
-  username String  @unique
-  password String?  @unique
+  id             String  @id @unique @default(cuid())
+  username       String  @unique
+  password       String? @unique
   profilePicture String?
-  email    String  @unique
-  role     Role
-  spaces   Space[] 
-  }
+  email          String  @unique
+  role           Role    @default(User)
+
+  // Spaces the user has access to
+  spaces Space[] @relation("AccessibleSpaces")
+
+  // Current space the user is in
+  currentSpaceId String?
+  currentSpace   Space?  @relation("CurrentSpace", fields: [currentSpaceId], references: [id])
+
+  // Spaces created by the user
+  createdSpaces Space[] @relation("SpaceAdmin")
+}
 
 model Space {
   id        String  @id @unique @default(cuid())
@@ -29,16 +38,16 @@ model Space {
   width     Int
   height    Int?
   thumbnail String?
+
+  // Creator of the space
   creatorId String
-  creator   User    @relation(fields: [creatorId], references: [id])
+  creator   User   @relation("SpaceAdmin", fields: [creatorId], references: [id])
 
-}
+  // Users who have access to this space
+  users User[] @relation("AccessibleSpaces")
 
-model Map {
-  id     String  @id @unique @default(cuid())
-  width  Int
-  height Int
-  name   String
+  // Users whose current space is this
+  currentUsers User[] @relation("CurrentSpace")
 }
 
 enum Role {
