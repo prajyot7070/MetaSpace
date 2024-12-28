@@ -128,6 +128,68 @@ spaceRouter.post('/:userId/:spaceId/join', async (req: Request, res: Response): 
     return res.status(500).json({ error: "An error occurred while joining the space." });
   }
 });
+  
+  // Get spaces created by a user
+  spaceRouter.get('/:userId/created-spaces', async (req: Request, res: Response): Promise<any> => {
+  const { userId } = req.params;
+  
+  try {
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+
+    const createdSpaces = await client.space.findMany({
+      where: { creatorId: userId },
+      select: {
+        id: true,
+        name: true,
+        width: true,
+        height: true,
+        thumbnail: true,
+      },
+    });
+
+    return res.status(200).json({ spaces: createdSpaces });
+  } catch (error) {
+    console.error("Error fetching created spaces:", error);
+    return res.status(500).json({ error: "An error occurred while fetching spaces created by the user." });
+  }
+});
+  
+    
+  // Get spaces the user has access to
+spaceRouter.get('/:userId/accessible-spaces', async (req: Request, res: Response): Promise<any> => {
+  const { userId } = req.params;
+
+  try {
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+
+    const accessibleSpaces = await client.space.findMany({
+      where: {
+        users: {
+          some: { id: userId },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        width: true,
+        height: true,
+        thumbnail: true,
+        creator: {
+          select: { username: true, email: true },
+        },
+      },
+    });
+
+    return res.status(200).json({ spaces: accessibleSpaces });
+  } catch (error) {
+    console.error("Error fetching accessible spaces:", error);
+    return res.status(500).json({ error: "An error occurred while fetching spaces the user has access to." });
+  }
+});
 
 // Get space information
 spaceRouter.get('/space-info/:spaceId', async (req: Request, res: Response): Promise<any> => {
