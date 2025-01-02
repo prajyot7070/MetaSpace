@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 import client from "@metaSpace/db";
 import { OutgoingMessage } from "./types";
 import { RoomManager } from "./RoomManager";
+import { userInfo } from "os";
 
 
 function getRandomString(length: number) {
@@ -46,12 +47,14 @@ export class User {
           }
           this.spaceId = spaceId;
           RoomManager.getInstance().addUser(spaceId, this);
+          this.x = 34;
+          this.y = 29;
           this.send({
             type: "space-joined",
             payload: {
               spawn: {
-                x: 34, //TODO : logic to calcualte current pos
-                y: 29
+                x: this.x, //TODO : logic to calcualte current pos
+                y: this.y
               },
               users: RoomManager.getInstance().rooms.get(spaceId)?.map((u) => ({id: u.id})) ?? []
             }
@@ -79,7 +82,8 @@ export class User {
             payload: {
               x: this.x,
               y: this.y
-            }
+            },
+            userId: this.id
           }, this, this.spaceId!);
             return;
           }
@@ -107,7 +111,7 @@ export class User {
     RoomManager.getInstance().broadcast({
       type: "user-left",
       payload: {
-        userId: this.userId
+        userId: this.id
       }
     }, this, this.spaceId!);
     RoomManager.getInstance().removeUser(this, this.spaceId!);
