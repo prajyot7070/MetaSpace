@@ -2,8 +2,8 @@ import { Types } from 'phaser';
 
 export const gameConfig: Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 1120,  // Adjust based on your needs
-  height: 640, // Adjust based on your needs
+  width: 800,  // Adjust based on your needs
+  height: 600, // Adjust based on your needs
   physics: {
     default: 'arcade',
     arcade: {

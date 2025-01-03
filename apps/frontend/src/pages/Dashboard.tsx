@@ -1,5 +1,15 @@
+//TODO:
+//[ ] : Success and Failed msg should have timer
+//[ ] : Form validation like Space name cannot be ""
+//[ ] : Loading indicators
+//[ ] : Make Space cards components
+//[ ] : Use ENV vars
+//[ ] : Pagination or Lazy loading
+ 
+
 import React, { useState, useEffect } from 'react';
 import { useAuth0 } from "@auth0/auth0-react";
+import { useNavigate } from "react-router-dom";
 
 interface Space {
   id: string;
@@ -20,6 +30,7 @@ const API_BASE_URL = 'http://localhost:3000/api/v1/space';
 
 export const Dashboard = () => {
   const { user, logout, isAuthenticated } = useAuth0();
+  const navigate = useNavigate();
   const [spaceId, setSpaceId] = useState("");
   const [mySpaces, setMySpaces] = useState<Space[]>([]);
   const [accessibleSpaces, setAccessibleSpaces] = useState<Space[]>([]);
@@ -63,6 +74,10 @@ export const Dashboard = () => {
     }
   };
 
+  const handlerEnterSpace = (spaceId: string) => {
+      navigate(`/arena/${spaceId}`); 
+    };
+
   const handleJoinSpace = async () => {
     try {
       if (!spaceId) {
@@ -88,7 +103,10 @@ export const Dashboard = () => {
       fetchSpaces();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join space');
+    } finally {
+      handlerEnterSpace(spaceId);
     }
+    
   };
 
   const handleDeleteSpace = async (spaceId: string) => {

@@ -56,7 +56,7 @@ export class User {
                 x: this.x, //TODO : logic to calcualte current pos
                 y: this.y
               },
-              users: RoomManager.getInstance().rooms.get(spaceId)?.map((u) => ({id: u.id})) ?? []
+              users: RoomManager.getInstance().rooms.get(spaceId)?.filter(x => x.id !== this.id)?.map((u) => ({id: u.id, x: u.x, y: u.y})) ?? []
             }
           });
           RoomManager.getInstance().broadcast({
@@ -80,10 +80,10 @@ export class User {
           RoomManager.getInstance().broadcast({
             type: "move",
             payload: {
+              userId: this.id,
               x: this.x,
               y: this.y
-            },
-            userId: this.id
+            }
           }, this, this.spaceId!);
             return;
           }

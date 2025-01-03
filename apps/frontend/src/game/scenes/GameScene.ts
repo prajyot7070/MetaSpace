@@ -8,9 +8,10 @@ export default class GameScene extends Scene {
   private userId: string;
   private spaceId: string;
   private player: Phaser.GameObjects.Sprite;
-  private players: Map<string, Phaser.GameObjects.Sprite> = new Map();
+  private users: Map<string, Phaser.GameObjects.Sprite>;
   constructor() {
     super("GameScene");
+    this.users = new Map();
   }
 
   preload() {
@@ -101,17 +102,51 @@ export default class GameScene extends Scene {
         this.player.setPosition(spawn.x * 16, spawn.y * 16);
         //add existing users to the Scene
         users.forEach((user: any) => {
-          if (user.id !==)
+          if (user.id !== this.userId) {
+            this.addUser(user.id, user.x, user.y);
+          }
         });
         break;
 
       case 'user-joined':
         //we need to store the spawn loc of the user joined to render that user
+        const {userId, x , y} = message.payload;
+        this.addUser(userId, x, y);
         console.log(`${message.payload.userId} joined the space`);
         break;
 
       case 'move':
-        
+        const {movingUserID, newX, newY}  = message.payload;
+        const movingUser = this.users.get(movingUserID);
+        if (movingUser) {
+          movingUser.setPosition(newX*16, newY*16);
+        }
+        break;
+
+      case 'user-left':
+        const {leavingUserID} = message.payload;
+        this.removeUser(leavingUserID);
+        console.log(`User ${leavingUserID} left.`);
+    
     }
+  }
+
+  addUser(userId: string, x: number, y:number){
+    if (this.users.has(userId)) return;
+    const userSprite = this.add.sprite(x*16, y*16, 'adam', 3);
+    this.users.set(userId, userSprite);
+  }
+
+  removeUser(userId: string) {
+    const userSprite = this.users.get(userId);
+    if(userSprite) {
+      userSprite.destroy();
+      this.users.delete(userId);
+      console.log(`User ${userId} left the space`);
+    }
+  }
+
+  update(){
+     //maybe for animations haven't understood this part yet 
   }
 }
