@@ -3,20 +3,20 @@ import { gameConfig } from "../config/GameConfig";
 import { WSMessage } from "../types/GameTypes";
 
 export default class GameScene extends Scene {
-  private players: Map<string, Phaser.GameObjects.Sprite> = new Map();
-  private ws: WebSocket;
-  private userId: string;
-  private spaceId: string;
-  private player: Phaser.GameObjects.Sprite;
-  private users: Map<string, Phaser.GameObjects.Sprite>;
+  private ws!: WebSocket;
+  private userId!: string;
+  private spaceId!: string;
+  private player!: Phaser.GameObjects.Sprite;
+  private users!: Map<string, Phaser.GameObjects.Sprite>;
   constructor() {
     super("GameScene");
     this.users = new Map();
   }
 
   preload() {
-    this.load.image('map', '../../assets/MetaSpace_map1.png');
-    this.load.spritesheet('avatar', '../../assets/Adam_idle_16x16.png', {
+    this.load.tilemapTiledJSON('map_json','/src/assets/MetaSpace_map1.json');
+    this.load.image('map', '/src/assets/MetaSpace_map1.png');
+    this.load.spritesheet('avatar', '/src/assets/Adam_idle_16x16.png', {
       frameWidth: 16,
       frameHeight: 32,
     });
@@ -28,7 +28,8 @@ export default class GameScene extends Scene {
     //create map
     this.add.image(0,0,'map').setOrigin(0);
     //create the player
-    this.player = this.add.sprite(100,100, 'adam', 3);
+    this.player = this.physics.add.sprite(100,100, 'avatar', 3);
+    this.player.setScale(4);
     //camera follows the avatar
     this.cameras.main.startFollow(this.player); 
 
@@ -50,44 +51,48 @@ export default class GameScene extends Scene {
     }
     // Handle the keyboard events
     this.input.keyboard?.on('keydown',(event: KeyboardEvent) => {
+      event.preventDefault();
       this.handleMovement(event);
     });
 
   }
 
+  
   handleMovement(event: KeyboardEvent) {
-    const move = { x: this.player.x/16, y: this.player.y/16};
+    const currentX = this.player.x;
+    const currentY = this.player.y;
+    const moveDistance = 16; // One tile width/height
 
     switch (event.code) {
       case 'ArrowUp':
-        move.y -= 1;
-        this.player.setFrame(1); // Back-facing
+        this.player.setPosition(currentX, currentY - moveDistance);
+        this.player.setFrame(1);
         break;
       case 'ArrowDown':
-        move.y += 1;
-        this.player.setFrame(3); // Front-facing
+        this.player.setPosition(currentX, currentY + moveDistance);
+        this.player.setFrame(3);
         break;
       case 'ArrowLeft':
-        move.x -= 1;
-        this.player.setFrame(0); // Left-facing
+        this.player.setPosition(currentX - moveDistance, currentY);
+        this.player.setFrame(2);
         break;
       case 'ArrowRight':
-        move.x += 1;
-        this.player.setFrame(2); // Right-facing
+        this.player.setPosition(currentX + moveDistance, currentY);
+        this.player.setFrame(0);
         break;
       default:
         return;
-    };
- 
-    //set the pos of avatar
-    this.player.setPosition(move.x * 16, move.y * 16);
+    }
 
-    //send server curr movement
+    // Send server current position (divided by 16 for tile coordinates)
     this.ws.send(JSON.stringify({
       type: 'move',
-      payload: move,
-      })
-    );
+      payload: {
+        x: this.player.x / 16,
+        y: this.player.y / 16,
+      },
+    }));
+
   }
 
   handleServerMessages(event: MessageEvent) {
@@ -147,6 +152,6 @@ export default class GameScene extends Scene {
   }
 
   update(){
-     //maybe for animations haven't understood this part yet 
+      
   }
 }

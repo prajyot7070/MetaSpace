@@ -1,4 +1,6 @@
-import { useEffect } from "react"; import Phaser from "phaser"; import GameScene from "../game/scenes/GameScene.ts";
+import { useEffect } from "react"; 
+import Phaser from "phaser"; 
+import GameScene from "../game/scenes/GameScene.ts";
 import { gameConfig } from "../game/config/GameConfig.ts";
 import { useParams } from "react-router-dom";
 
@@ -13,7 +15,14 @@ export const Areana = () => {
 
     const config = {
       ...gameConfig,
+      parent: 'phaser-game',
       scene: [GameScene],
+      scale: {
+        mode: Phaser.Scale.FIT,
+        parent: 'phaser-game',
+        width: 800,
+        height: 600,
+      },
     };
 
     const game = new Phaser.Game(config);
@@ -23,8 +32,23 @@ export const Areana = () => {
     };
   }, [spaceId]);
 
-  return <>
-    <div>Areana page</div>
-    <div id="phaser-game" style={{ width: "800px", height: "600px" }}></div>;
-  </>
-};
+  return (
+    <div className="game-container">
+      <div>Arena page</div>
+      <div id="phaser-game" />
+      <style>{`
+        .game-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 100%;
+          height: 100vh;
+        }
+        #phaser-game {
+          width: 800px;
+          height: 600px;
+          margin: 0 auto;
+        }
+      `}</style>
+    </div>
+  );};
