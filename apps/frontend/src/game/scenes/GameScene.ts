@@ -100,14 +100,17 @@ export default class GameScene extends Scene {
 
     switch (message.type) {
       case 'space-joined':
-        const { spawn, users } = message.payload;
-        const currUser = users[users.length - 1];
-        this.userId = currUser.id;
+        console.log("space-joined");
+        const { spawn: spawn, users: usersList } = message.payload;
+        console.log("UsersList :- " + usersList)
+        //const currUser = users[users.length - 1];
+        //this.userId = currUser.id;
         //setting the pos received from the ws
         this.player.setPosition(spawn.x * 16, spawn.y * 16);
         //add existing users to the Scene
-        users.forEach((user: any) => {
-          if (user.id !== this.userId) {
+        usersList.forEach((user: any) => {
+          if (user.id) {
+            console.log(`Adding user ${usersList}`); //debugging
             this.addUser(user.id, user.x, user.y);
           }
         });
@@ -117,11 +120,12 @@ export default class GameScene extends Scene {
         //we need to store the spawn loc of the user joined to render that user
         const {userId, x , y} = message.payload;
         this.addUser(userId, x, y);
-        console.log(`${message.payload.userId} joined the space`);
+        console.log(`New User ${message.payload.userId} joined the space`);
         break;
 
       case 'move':
-        const {movingUserID, newX, newY}  = message.payload;
+        const {userId: movingUserID, x: newX, y: newY}  = message.payload;
+        console.log(`User ${movingUserID} moved to ${newX} , ${newY}`);
         const movingUser = this.users.get(movingUserID);
         if (movingUser) {
           movingUser.setPosition(newX*16, newY*16);
@@ -129,7 +133,7 @@ export default class GameScene extends Scene {
         break;
 
       case 'user-left':
-        const {leavingUserID} = message.payload;
+        const {userId: leavingUserID} = message.payload;
         this.removeUser(leavingUserID);
         console.log(`User ${leavingUserID} left.`);
     
@@ -138,7 +142,9 @@ export default class GameScene extends Scene {
 
   addUser(userId: string, x: number, y:number){
     if (this.users.has(userId)) return;
-    const userSprite = this.add.sprite(x*16, y*16, 'adam', 3);
+    console.log(`Adding Sprite for User ${userId} at ${x}, ${y}`);
+    const userSprite = this.add.sprite(x*16, y*16, 'avatar', 3);
+    userSprite.setScale(4);
     this.users.set(userId, userSprite);
   }
 
