@@ -47,8 +47,8 @@ export class User {
           }
           this.spaceId = spaceId;
           RoomManager.getInstance().addUser(spaceId, this);
-          this.x = 34;
-          this.y = 29;
+          this.x = 18;
+          this.y = 9;
           this.send({
             type: "space-joined",
             payload: {

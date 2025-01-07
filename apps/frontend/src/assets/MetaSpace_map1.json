@@ -301,9 +301,15 @@
          "height":40,
          "id":7,
          "name":"Collision",
-         "opacity":0.33,
+         "opacity":0,
+         "properties":[
+                {
+                 "name":"collides",
+                 "type":"string",
+                 "value":"true"
+                }],
          "type":"tilelayer",
-         "visible":false,
+         "visible":true,
          "width":70,
          "x":0,
          "y":0
@@ -354,7 +360,7 @@
          "name":"Foreground",
          "opacity":1,
          "type":"tilelayer",
-         "visible":false,
+         "visible":true,
          "width":70,
          "x":0,
          "y":0
@@ -367,16 +373,43 @@
  "tileheight":16,
  "tilesets":[
         {
+         "columns":17,
          "firstgid":1,
-         "source":"..\/..\/..\/..\/..\/..\/..\/snap\/tiled\/current\/Metaspace-tileset.tsx"
+         "image":"Metaspace-tileset.png",
+         "imageheight":368,
+         "imagewidth":272,
+         "margin":0,
+         "name":"Metaspace-tileset",
+         "spacing":0,
+         "tilecount":391,
+         "tileheight":16,
+         "tilewidth":16
         }, 
         {
+         "columns":16,
          "firstgid":392,
-         "source":"..\/..\/..\/..\/..\/..\/..\/snap\/tiled\/current\/Metaspace-Interirors.tsx"
+         "image":"Metaspace-Interirors.png",
+         "imageheight":1424,
+         "imagewidth":256,
+         "margin":0,
+         "name":"Metaspace-Interirors",
+         "spacing":0,
+         "tilecount":1424,
+         "tileheight":16,
+         "tilewidth":16
         }, 
         {
+         "columns":1,
          "firstgid":1816,
-         "source":"..\/..\/..\/..\/..\/..\/..\/snap\/tiled\/current\/Collision-tileset.tsx"
+         "image":"Collision-tileset.png",
+         "imageheight":16,
+         "imagewidth":16,
+         "margin":0,
+         "name":"Collision-tileset",
+         "spacing":0,
+         "tilecount":1,
+         "tileheight":16,
+         "tilewidth":16
         }],
  "tilewidth":16,
  "type":"map",

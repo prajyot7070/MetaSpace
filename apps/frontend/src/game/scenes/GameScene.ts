@@ -1,13 +1,13 @@
-import { Scene } from "phaser";
-import { gameConfig } from "../config/GameConfig";
+import { Scene} from "phaser";
 import { WSMessage } from "../types/GameTypes";
 
 export default class GameScene extends Scene {
   private ws!: WebSocket;
-  private userId!: string;
+//  private userId!: string;
   private spaceId!: string;
-  private player!: Phaser.GameObjects.Sprite;
+  private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private users!: Map<string, Phaser.GameObjects.Sprite>;
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   constructor() {
     super("GameScene");
     this.users = new Map();
@@ -15,21 +15,58 @@ export default class GameScene extends Scene {
 
   preload() {
     this.load.tilemapTiledJSON('map_json','/src/assets/MetaSpace_map1.json');
-    this.load.image('map', '/src/assets/MetaSpace_map1.png');
+    this.load.image('Metaspace-tileset', '/src/assets/Metaspace-tileset.png');
+    this.load.image('Metaspace-Interirors', '/src/assets/Metaspace-Interirors.png');
+    this.load.image('Collision-tileset', '/src/assets/Collision-tileset.png');
     this.load.spritesheet('avatar', '/src/assets/Adam_idle_16x16.png', {
-      frameWidth: 16,
-      frameHeight: 32,
+        frameWidth: 16,
+        frameHeight: 32,
     });
-  }
-
+}
   create() {
     //create ws connection
     this.ws = new WebSocket('ws://localhost:8080')
-    //create map
-    this.add.image(0,0,'map').setOrigin(0);
-    //create the player
+    // Create tilemap
+    const map = this.make.tilemap({ key: 'map_json' });
+    // Add tilsets
+    const metaspaceTileset = map.addTilesetImage('Metaspace-tileset', 'Metaspace-tileset');
+    const interiorsTileset = map.addTilesetImage('Metaspace-Interirors', 'Metaspace-Interirors');
+    const collisionTileset = map.addTilesetImage('Collision-tileset', 'Collision-tileset');
+    if (!metaspaceTileset || !interiorsTileset || !collisionTileset) {
+      console.log("Failed to load tilesets");
+      return;
+    }
+    const tileset = [ metaspaceTileset, interiorsTileset, collisionTileset];
+    //Create Layers
+    const floorLayer = map.createLayer('Floor', tileset!, 0, 0);
+    const floorPlanLayer = map.createLayer('Floor Plan', tileset!, 0, 0);
+    const furnitureLayer2 = map.createLayer('Furniture 2', tileset!, 0, 0);
+    const furnitureLayer1 = map.createLayer('Furniture 1', tileset!, 0, 0);
+    const furnitureLayer3 = map.createLayer('Furniture 3', tileset!, 0, 0);
+    const collisionLayer = map.createLayer('Collision', tileset!, 0, 0);
+    const foregroundLayer = map.createLayer('Foreground', tileset!, 0, 0);
+     
+    furnitureLayer1?.setVisible(true);
+    // Scale all layers
+    const layers = [floorLayer, floorPlanLayer, furnitureLayer1, furnitureLayer2, 
+                   furnitureLayer3, collisionLayer, foregroundLayer];
+    
+    layers.forEach(layer => {
+        if (layer) {
+            layer.setScale(4); // Adjust this scale value as needed
+        }
+    });
+    //Collision layer
+    if (collisionLayer) {  
+      collisionLayer.setCollisionByProperty({collides: true});
+      console.log("Collision set")
+    }
+    //create the player with physics
     this.player = this.physics.add.sprite(100,100, 'avatar', 3);
     this.player.setScale(4);
+    //this.player.setCollideWorldBounds(true);
+    this.physics.add.collider(this.player, collisionLayer!);
+    this.cursors = this.input.keyboard!.createCursorKeys();
     //camera follows the avatar
     this.cameras.main.startFollow(this.player); 
 
@@ -54,35 +91,37 @@ export default class GameScene extends Scene {
       event.preventDefault();
       this.handleMovement(event);
     });
-
+    
+    foregroundLayer?.setDepth(1);
   }
 
   
-  handleMovement(event: KeyboardEvent) {
-    const currentX = this.player.x;
-    const currentY = this.player.y;
-    const moveDistance = 16; // One tile width/height
+  
+ handleMovement(event: KeyboardEvent) {
+    const velocity = 250; // Pixels per second
+    const playerVelocity = { x: 0, y: 0 };
 
     switch (event.code) {
       case 'ArrowUp':
-        this.player.setPosition(currentX, currentY - moveDistance);
+        playerVelocity.y = -velocity;
         this.player.setFrame(1);
         break;
       case 'ArrowDown':
-        this.player.setPosition(currentX, currentY + moveDistance);
+        playerVelocity.y = velocity;
         this.player.setFrame(3);
         break;
       case 'ArrowLeft':
-        this.player.setPosition(currentX - moveDistance, currentY);
+        playerVelocity.x = -velocity;
         this.player.setFrame(2);
         break;
       case 'ArrowRight':
-        this.player.setPosition(currentX + moveDistance, currentY);
+        playerVelocity.x = velocity;
         this.player.setFrame(0);
         break;
-      default:
-        return;
     }
+
+    // Apply velocity to player
+    this.player.setVelocity(playerVelocity.x, playerVelocity.y);
 
     // Send server current position (divided by 16 for tile coordinates)
     this.ws.send(JSON.stringify({
@@ -158,6 +197,21 @@ export default class GameScene extends Scene {
   }
 
   update(){
-      
+ // Collision and movement handling
+  if (this.cursors.left.isDown) {
+    this.player.setVelocityX(-160);
+  } else if (this.cursors.right.isDown) {
+    this.player.setVelocityX(160);
+  } else {
+    this.player.setVelocityX(0);
+  }
+
+  if (this.cursors.up.isDown) {
+    this.player.setVelocityY(-160);
+  } else if (this.cursors.down.isDown) {
+    this.player.setVelocityY(160);
+  } else {
+    this.player.setVelocityY(0);
+  }
   }
 }
