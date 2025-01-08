@@ -74,7 +74,7 @@ export class User {
           const moveY = parsedData.payload.y;
           const xDisplacement = Math.abs(this.x - moveX);
           const yDisplacement = Math.abs(this.y - moveY);
-          if ((xDisplacement == 1 && yDisplacement == 0) || (xDisplacement == 0 && yDisplacement == 1) ) {
+          //if ((xDisplacement == 1 && yDisplacement == 0) || (xDisplacement == 0 && yDisplacement == 1) ) {
           this.x = moveX;
           this.y = moveY;
           RoomManager.getInstance().broadcast({
@@ -86,15 +86,15 @@ export class User {
             }
           }, this, this.spaceId!);
             return;
-          }
+          //}
           
-          this.send({
-            type: "move-rejected",
-            payload: {
-              x: this.x,
-              y : this.y
-            }
-          })
+//          this.send({
+//            type: "move-rejected",
+//            payload: {
+//              x: this.x,
+//              y : this.y
+//            }
+//          })
         break;
           
         default:
