@@ -1,11 +1,16 @@
 import { Scene } from "phaser";
-import { WSMessage } from "../types/GameTypes";
+import { WSMessage} from "../types/GameTypes";
+
+interface UserData {
+  sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+  lastPosition: { x: number; y: number };
+}
 
 export default class GameScene extends Scene {
   private ws!: WebSocket;
   private spaceId!: string;
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
-  private users!: Map<string, Phaser.GameObjects.Sprite>;
+  private users!: Map<string, UserData>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
   constructor() {
@@ -71,8 +76,6 @@ export default class GameScene extends Scene {
     if (collisionLayer) {
       // Set collision for the entire layer
       collisionLayer.setCollisionByExclusion([-1]);
-      
-      // Optional: Make collision layer invisible
       collisionLayer.setVisible(false);
       
       
@@ -113,6 +116,9 @@ export default class GameScene extends Scene {
 
     // WebSocket setup
     this.setupWebSocket();
+
+    //clean up
+    window.addEventListener('beforeunload', () => this.cleanup());
   }
 
   private setupWebSocket() {
@@ -133,7 +139,38 @@ export default class GameScene extends Scene {
     };
   }
 
-  // Your existing handleServerMessages, addUser, and removeUser methods remain the same
+  //Calculate the direction
+  private getDirectionFrame(currentPos: {x: number; y: number}, lastPos: {x: number; y: number}) {
+    const dx = currentPos.x - lastPos.x;
+    const dy = currentPos.y - lastPos.y;
+    const threshold = 2;
+    //debugging
+    console.log(`dx :- ${Math.abs(dx)} \n dy :- ${Math.abs(dy)}`)
+    if (Math.floor(Math.abs(dx)) < threshold && Math.floor(Math.abs(dy)) < threshold){
+      return -1; //nochange
+    }
+    else if ( Math.abs(dx) > Math.abs(dy)) {
+      return dx > 0 ? 0 : 2;
+    } else {
+      return dy > 0 ? 3 : 1;
+    }
+  }
+
+  //Clean up fn
+  private cleanup() {
+    this.users.forEach((userData, userId) => {
+      this.removeUser(userId);
+    });
+    this.users.clear();
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'leave',
+        payload: { spaceId: this.spaceId }
+      }));
+      this.ws.close();
+    }
+  }
   
   handleServerMessages(event: MessageEvent) {
     const message: WSMessage = JSON.parse(event.data);
@@ -166,9 +203,13 @@ export default class GameScene extends Scene {
       case 'move':
         const {userId: movingUserID, x: newX, y: newY}  = message.payload;
         console.log(`User ${movingUserID} moved to ${newX} , ${newY}`);
-        const movingUser = this.users.get(movingUserID);
-        if (movingUser) {
-          movingUser.setPosition(newX*16, newY*16);
+        const userData = this.users.get(movingUserID);
+        if (userData) {
+          const newPos = { x: newX*16,y: newY*16 };
+          const frame = this.getDirectionFrame(newPos, userData.lastPosition);
+          userData.sprite.setPosition(newPos.x, newPos.y);
+          userData.sprite.setFrame(frame);
+          userData.lastPosition = newPos;
         }
         break;
 
@@ -183,15 +224,22 @@ export default class GameScene extends Scene {
   addUser(userId: string, x: number, y:number){
     if (this.users.has(userId)) return;
     console.log(`Adding Sprite for User ${userId} at ${x}, ${y}`);
-    const userSprite = this.add.sprite(x*16, y*16, 'avatar', 3);
+    const userSprite = this.physics.add.sprite(x*16, y*16, 'avatar', 3);
     userSprite.setScale(4);
-    this.users.set(userId, userSprite);
+    userSprite.setCollideWorldBounds(true);
+    userSprite.setBounce(0);
+    userSprite.setSize(14, 16);
+    userSprite.setOffset(1,16);
+    this.users.set(userId, {
+      sprite: userSprite,
+      lastPosition: {x :x * 16, y: y * 16}
+    });
   }
 
   removeUser(userId: string) {
-    const userSprite = this.users.get(userId);
-    if(userSprite) {
-      userSprite.destroy();
+    const userData = this.users.get(userId);
+    if(userData) {
+      userData.sprite.destroy();
       this.users.delete(userId);
       console.log(`User ${userId} left the space`);
     }

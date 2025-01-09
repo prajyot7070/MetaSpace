@@ -4,6 +4,11 @@ export interface PlayerState {
   y: number;
 }
 
+//export interface UserSate {
+//  sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+//  lastPosition: {x: number, y: number};
+//}
+
 export interface GameState {
   players: Map<string, PlayerState>;
 }

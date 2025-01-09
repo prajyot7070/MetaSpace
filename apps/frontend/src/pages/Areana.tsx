@@ -40,14 +40,13 @@ export const Areana = () => {
         .game-container {
           display: flex;
           flex-direction: column;
-          align-items: center;
+          align-items: start;
           width: 100%;
           height: 100vh;
         }
         #phaser-game {
-          width: 800px;
-          height: 600px;
-          margin: 0 auto;
+          width: 1080px;
+          height: 720px;
         }
       `}</style>
     </div>
