@@ -1,81 +1,86 @@
-# Turborepo starter
 
-This is an official starter Turborepo.
+# MetaSpace Project
 
-## Using this example
+Welcome to **MetaSpace**, a 2D metaverse platform inspired by GatherTown. This project is designed to provide an engaging and interactive virtual space for users to meet, collaborate, and explore. With real-time multiplayer capabilities and a focus on proximity-based interactions, MetaSpace offers a unique blend of social connectivity and immersive experience.
 
-Run the following command:
+## Current Features
 
-```sh
-npx create-turbo@latest
-```
+### 1. Space Creation
+- Users can create and customize virtual spaces to host events, meetings, or casual hangouts.
 
-## What's inside?
+### 2. Multiplayer Functionality
+- Real-time multiplayer interactions are powered by WebSockets, enabling smooth and seamless communication between users.
 
-This Turborepo includes the following packages/apps:
+### 3. Proximity Detection (Planned)
+- Proximity-based interactions will allow users to engage with others within certain areas of the virtual space, simulating real-world social dynamics.
 
-### Apps and Packages
+### 4. WebRTC Integration (In Progress)
+- Upcoming features include voice and video calling using WebRTC, enhancing the social experience within MetaSpace.
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+### 5. UI/UX (In Progress)
+- A user-friendly and visually appealing interface is being developed to ensure an intuitive experience for all users.
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## Installation
 
-### Utilities
+To get started with MetaSpace, follow these steps:
 
-This Turborepo has some additional tools already setup for you:
+### Prerequisites
+- Node.js (v14 or later)
+- npm or yarn
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+### Setup
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/prajyot7070/MetaSpace.git
+   cd MetaSpace
+   ```
 
-### Build
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+   Or with yarn:
+   ```bash
+   yarn install
+   ```
 
-To build all apps and packages, run the following command:
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+   Or with yarn:
+   ```bash
+   yarn dev
+   ```
 
-```
-cd my-turborepo
-pnpm build
-```
+4. Access the application at `http://localhost:3000`.
 
-### Develop
+## Directory Structure
 
-To develop all apps and packages, run the following command:
+The project is structured into several key directories:
 
-```
-cd my-turborepo
-pnpm dev
-```
+- **apps/frontend**: Contains the frontend code, including components, pages, and game logic.
+- **apps/httpservice**: Manages API routes and server-side logic.
+- **apps/ws**: Handles WebSocket connections for multiplayer functionality.
+- **packages/db**: Contains database schemas and migration files.
+- **packages/ui**: Houses reusable UI components and configurations.
 
-### Remote Caching
+## Roadmap
 
-Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+- [x] Space creation logic
+- [x] WebSocket-based multiplayer
+- [ ] Proximity detection for user interactions
+- [ ] WebRTC server for voice and video calling
+- [ ] Enhanced UI/UX design
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup), then enter the following commands:
+## License
 
-```
-cd my-turborepo
-npx turbo login
-```
+MetaSpace is licensed under the MIT License. See `LICENSE` for more information.
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+## Contact
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+For any inquiries, please contact [prajyot7070](mailto:prajyot7070@example.com).
 
-```
-npx turbo link
-```
+We hope you enjoy exploring and contributing to MetaSpace!
 
-## Useful Links
 
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
-- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
-- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
-- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
-- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
-- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)
