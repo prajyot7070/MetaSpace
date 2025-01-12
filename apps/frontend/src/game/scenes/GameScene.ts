@@ -28,8 +28,9 @@ export default class GameScene extends Scene {
       frameHeight: 32,
     });
   }
-
+  
   create() {
+    this.spaceId = this.game.registry.get('spaceId');
     // Initialize physics system
     this.physics.world.setBounds(0, 0, 3200, 3200); // Adjust bounds as needed
 

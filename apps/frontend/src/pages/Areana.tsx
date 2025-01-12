@@ -5,7 +5,7 @@ import { gameConfig } from "../game/config/GameConfig.ts";
 import { useParams } from "react-router-dom";
 
 export const Areana = () => {
-  const { spaceId } = useParams<{ spaceId: string }>();
+   const { spaceId } = useParams<{ spaceId: string }>();
 
   useEffect(() => {
     if (!spaceId) {
@@ -26,6 +26,7 @@ export const Areana = () => {
     };
 
     const game = new Phaser.Game(config);
+    game.registry.set('spaceId', spaceId);
 
     return () => {
       game.destroy(true);

@@ -34,7 +34,7 @@ export class User {
   initHandlers(){
     this.ws.on("message",async (data) => {
       const parsedData = JSON.parse(data.toString());
-      console.log(parsedData);
+      //console.log(parsedData);
       switch (parsedData.type) {
         case "join":
           const spaceId = parsedData.payload.spaceId; 
@@ -46,9 +46,10 @@ export class User {
             return;
           }
           this.spaceId = spaceId;
+          this.checkHealth();
           RoomManager.getInstance().addUser(spaceId, this);
-          this.x = 18;
-          this.y = 9;
+          this.x = 10;
+          this.y = 12;
           this.send({
             type: "space-joined",
             payload: {
@@ -74,9 +75,14 @@ export class User {
           const moveY = parsedData.payload.y;
           const xDisplacement = Math.abs(this.x - moveX);
           const yDisplacement = Math.abs(this.y - moveY);
+
+          //console.log(`Old : x - ${this.x} | y - ${this.y} \n New : x - ${moveX} | y - ${moveY}`);
           //if ((xDisplacement == 1 && yDisplacement == 0) || (xDisplacement == 0 && yDisplacement == 1) ) {
           this.x = moveX;
           this.y = moveY;
+          const nearByUsers = this.usersInProximity(10, this.spaceId!);
+          console.log(`nearByUsers ${nearByUsers}`);
+          this.checkHealth();
           RoomManager.getInstance().broadcast({
             type: "move",
             payload: {
@@ -85,16 +91,15 @@ export class User {
               y: this.y
             }
           }, this, this.spaceId!);
-            return;
+          //return;
           //}
           
-//          this.send({
-//            type: "move-rejected",
-//            payload: {
-//              x: this.x,
-//              y : this.y
-//            }
-//          })
+          this.send({
+            type: "nearby-users",
+            payload: {
+              nearByUsers 
+            }
+          })
         break;
           
         default:
@@ -115,5 +120,28 @@ export class User {
       }
     }, this, this.spaceId!);
     RoomManager.getInstance().removeUser(this, this.spaceId!);
+  }
+  
+  getX() {
+    return this.x;
+  }
+
+  getY() {
+    return this.y;
+  }
+
+  usersInProximity(threshold: number, spaceId: string): string[] {
+    if (this.spaceId) {
+    const distances = RoomManager.getInstance().calculateDistances(this, this.spaceId);
+    console.log(`All Distances ${distances}`);
+    const nearByUsers = distances.filter(({distance}) => distance <= threshold).map(({userId}) => userId);
+    return nearByUsers;
+    } else {
+      console.log(`spaceId :- ${spaceId}`)
+      return []};
+  }
+
+  checkHealth() {
+    console.log(`User \n userId : ${this.userId} \n ${this.spaceId}`);
   }
 }
