@@ -144,7 +144,7 @@ export default class GameScene extends Scene {
   private getDirectionFrame(currentPos: {x: number; y: number}, lastPos: {x: number; y: number}) {
     const dx = currentPos.x - lastPos.x;
     const dy = currentPos.y - lastPos.y;
-    const threshold = 2;
+    const threshold = 1;
     //debugging
     console.log(`dx :- ${Math.abs(dx)} \n dy :- ${Math.abs(dy)}`)
     if (Math.floor(Math.abs(dx)) < threshold && Math.floor(Math.abs(dy)) < threshold){

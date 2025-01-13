@@ -132,7 +132,7 @@ export class User {
 
   usersInProximity(threshold: number, spaceId: string): string[] {
     if (this.spaceId) {
-    const distances = RoomManager.getInstance().calculateDistances(this, this.spaceId);
+    const distances = RoomManager.getInstance().calculateDistances(this, spaceId);
     console.log(`All Distances ${distances}`);
     const nearByUsers = distances.filter(({distance}) => distance <= threshold).map(({userId}) => userId);
     return nearByUsers;
