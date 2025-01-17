@@ -78,13 +78,22 @@ export class RoomManager {
     spaceUsers.forEach((otherUser) => {
       if (otherUser.id === user.id) return;
       const otherUserPartition = this.getUserPartition(otherUser.getX(), otherUser.getY());
+      if(otherUserPartition === userPartition) {
       const distance = Math.sqrt(
         Math.pow(user.getX() - otherUser.getX(), 2) +
         Math.pow(user.getY() - otherUser.getY(), 2)
       );
       distances.push({userId: otherUser.id, distance: distance});
+      }
     });
     return distances; 
+  }
+
+  public checkProximityForAll(spaceId: string) {
+    if (!this.rooms.has(spaceId)) return;
+    this.rooms.get(spaceId)?.forEach(user => {
+      
+    })
   }
 
 
