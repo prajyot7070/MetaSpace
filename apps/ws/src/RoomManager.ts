@@ -39,7 +39,6 @@ export class RoomManager {
   public addUser(spaceId: string, user: User) {
     if (!this.rooms.has(spaceId)){
       this.rooms.set(spaceId, [user]);
-      return;
     }
     this.rooms.set(spaceId, [...(this.rooms.get(spaceId) ?? []), user]);
     this.proximityStates.set(user.id, {
@@ -49,6 +48,7 @@ export class RoomManager {
 
     //initial check for Proximity when user is added
     this.updateProximityForUser(user, spaceId);
+    return;
   }
 
   public removeUser(user: User, spaceId: string) {
@@ -120,10 +120,36 @@ export class RoomManager {
       const otherUserPartition = this.getUserPartition(otherUser.getX(), otherUser.getY());
       if (otherUserPartition === userPartition) {
         const distance = this.calculateDistance(user, otherUser);
-        if (distance <= threshold) {
+        const isNearBy = distance <= threshold;
+        const wasNearBy = currentState.nearbyUsers.has(otherUser.id);
+        if (isNearBy) {
           nearbyUserIds.add(otherUser.id);
-
-          this.updateSingleUserProximity(otherUser, user, spaceId, threshold);
+        }
+        //update the otherUser's state and notify
+        const otherUsersState = this.proximityStates.get(otherUser.id);
+        if (otherUsersState) {
+          const otherWasNearBy = otherUsersState.nearbyUsers.has(user.id);
+          if (isNearBy && !otherWasNearBy) {
+            otherUsersState.nearbyUsers.add(user.id);
+            otherUser.send({
+              type: "nearby-users-updated",
+              payload: {
+                nearby: Array.from(otherUsersState.nearbyUsers),
+                added: [user.id],
+                removed: []
+              }
+            });
+          } else if (!isNearBy && wasNearBy) {
+            otherUsersState.nearbyUsers.delete(user.id);
+            otherUser.send({
+              type: "nearby-users-updated",
+              payload: {
+                nearby: Array.from(otherUsersState.nearbyUsers),
+                added: [],
+                removed: [user.id]
+              }
+            });
+          }
         }
       } 
     });
@@ -146,33 +172,4 @@ export class RoomManager {
     }
   }
 
-  public updateSingleUserProximity(targetUser: User, movingUser: User, spaceId: string, threshold:number = 10) {
-    const targetUserState = this.proximityStates.get(targetUser.id);
-    if (!targetUserState) return;
-    const distance = this.calculateDistance(targetUser, movingUser);
-    const wasNearby = targetUserState.nearbyUsers.has(movingUser.id);
-    //If new user comes into range set proximityState and send response
-    if (distance <= threshold && !wasNearby) {
-      targetUserState.nearbyUsers.add(movingUser.id);
-      targetUser.send({
-        type: "nearby-users-updated",
-        payload: {
-          nearby: Array.from(targetUserState.nearbyUsers),
-          added: [movingUser.id],
-          removed: []
-        }
-      })
-    } else if (distance >= threshold && wasNearby) { //If user goes out of range update the proximityState and send response
-      targetUserState.nearbyUsers.delete(movingUser.id);
-      targetUser.send({
-        type: "nearby-users-updated",
-        payload: {
-          nearby: Array.from(targetUserState.nearbyUsers),
-          added: [],
-          removed: [movingUser.id]
-        }
-      });
-    }
   }
-
-}
