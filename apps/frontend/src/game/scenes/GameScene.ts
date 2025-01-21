@@ -146,7 +146,7 @@ export default class GameScene extends Scene {
     const dy = currentPos.y - lastPos.y;
     const threshold = 1;
     //debugging
-    console.log(`dx :- ${Math.abs(dx)} \n dy :- ${Math.abs(dy)}`)
+    //console.log(`dx :- ${Math.abs(dx)} \n dy :- ${Math.abs(dy)}`)
     if (Math.floor(Math.abs(dx)) < threshold && Math.floor(Math.abs(dy)) < threshold){
       return -1; //nochange
     }
@@ -203,7 +203,7 @@ export default class GameScene extends Scene {
 
       case 'move':
         const {userId: movingUserID, x: newX, y: newY}  = message.payload;
-        console.log(`User ${movingUserID} moved to ${newX} , ${newY}`);
+        //console.log(`User ${movingUserID} moved to ${newX} , ${newY}`);
         const userData = this.users.get(movingUserID);
         if (userData) {
           const newPos = { x: newX*16,y: newY*16 };
