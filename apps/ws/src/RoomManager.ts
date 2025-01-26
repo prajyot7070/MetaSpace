@@ -2,6 +2,7 @@ import { StringLiteralLike } from "typescript";
 import * as crypto from 'crypto';
 import { User } from "./User";
 import { OutgoingMessage } from "./types";
+import e from "express";
 
 interface VirtualPartition {
   topLeft: { x: number; y: number};
@@ -153,11 +154,27 @@ export class RoomManager {
     if (existingGroupId) {
       console.log("Adding user to group");
       const existingGroup = this.proximityGroups.get(existingGroupId);
-      existingGroup?.members.add(otherUserId);
-      this.userGroupMap.set(otherUserId, existingGroupId);
-      this.notifyGroupUpdate(existingGroup!, "added");
-      return existingGroup!;
+      if (existingGroup) {
+        existingGroup.members.add(otherUserId);
+        this.userGroupMap.set(otherUserId, existingGroupId);
+        this.notifyGroupUpdate(existingGroup, "added");
+        return existingGroup;
+      }
     }
+
+    //check if otherUser is already in a group and add anchorUser to that group
+    const otherUserGroupId = this.checkUserGroup(otherUserId);
+    if (otherUserGroupId) {
+      console.log("Adding user to group");
+      const otherUserGroup = this.proximityGroups.get(otherUserGroupId);
+      if (otherUserGroup) {
+        otherUserGroup.members.add(anchorUser.id);
+        this.userGroupMap.set(anchorUser.id, otherUserGroupId);
+        this.notifyGroupUpdate(otherUserGroup, "added");
+        return otherUserGroup;
+      }
+    }
+
     console.log('Creating a group')
     const group: ProximityGroup = {
       groupId: this.generateToken(),
@@ -201,7 +218,7 @@ export class RoomManager {
     if (!userPartition) return;
     const currentState = this.proximityStates.get(user.id);
     if (!currentState) return;
-//    console.log(`Inside the updateProximityForUser()`);  
+
     const spaceUsers = this.rooms.get(spaceId) ?? [];
     const nearbyUserIds = new Set<string>();
     
@@ -250,38 +267,31 @@ export class RoomManager {
     //Handle added users
     added.forEach(addedUserId => {
       console.log(`added users : ${added}`)
-      console.log(`Checking proximituy group for added users ${addedUserId}`)
+      console.log(`Checking proximity group for added users ${addedUserId}`)
       if (user.id < addedUserId) {
-        const addeUserGroupId = this.checkUserGroup(addedUserId);
-        
-        if (!addeUserGroupId) {
-          console.log(`Creating group between ${user.id} and ${addedUserId}`)
-          this.createOrUpdateGroup(user, addedUserId);
-        }
-
+        this.createOrUpdateGroup(user, addedUserId);
       }  
     });
 
     //Handle removed users
     removed.forEach(removedUserId => {
-      console.log(`removed users : ${removed}`)
-      const removedUserGroupId = this.checkUserGroup(removedUserId);
-      console.log(`removedUserGroupId :- ${removedUserGroupId}`);
-      if (removedUserGroupId) {
-        const removedUserGroup = this.proximityGroups.get(removedUserGroupId)!;
-      
-      if (removedUserGroup) {
-        removedUserGroup.members.delete(removedUserId);
-        this.notifyGroupUpdate(removedUserGroup!, "removed");
-          console.log(`Removed user ${removedUserId} from ${removedUserGroup.groupId}`);
+      //Goal is to delete yourself from the group you were part of -> removed wale logo ke sath mein phele tha but abb nahi hu that means mein unke group mein tha 
+      const currentUserGroupId = this.checkUserGroup(user.id);
+      if (currentUserGroupId) {
+        const currentUserGroup = this.proximityGroups.get(currentUserGroupId);
+        if (currentUserGroup && currentUserGroup.members.has(user.id)) {
+          currentUserGroup.members.delete(user.id);
+          this.notifyGroupUpdate(currentUserGroup, "removed");
+
+          //after removing myself if the group only consist of 1 person than dissolve the group
+          if (currentUserGroup.members.size === 1) {
+            currentUserGroup.members.clear();
+            this.proximityGroups.delete(currentUserGroupId);
+            this.notifyGroupUpdate(currentUserGroup, "dissolved");
+          }
+        }
       }
-      if (removedUserGroup.members.size < 2) {
-        this.proximityGroups.delete(removedUserGroupId!);
-        this.notifyGroupUpdate(removedUserGroup!,"dissolved");
-        console.log(`Dissolving group ${removedUserGroup?.groupId}`);
-      } 
-      }
-    })
+    });
 
     if(added.length > 0 || removed.length > 0) {
       //update the state
@@ -298,5 +308,4 @@ export class RoomManager {
       });
     }
   }
-
-  }
+}
