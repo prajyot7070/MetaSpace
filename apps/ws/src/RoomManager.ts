@@ -1,8 +1,8 @@
-import { StringLiteralLike } from "typescript";
 import * as crypto from 'crypto';
 import { User } from "./User";
 import { OutgoingMessage } from "./types";
 import e from "express";
+import redisManager from "../../redis-service/src";
 
 interface VirtualPartition {
   topLeft: { x: number; y: number};
@@ -157,6 +157,10 @@ export class RoomManager {
       if (existingGroup) {
         existingGroup.members.add(otherUserId);
         this.userGroupMap.set(otherUserId, existingGroupId);
+        //add the user to group in redis-store 
+        console.log(`Adding members :- ${[otherUserId]} to Token :- ${existingGroup.token}`)
+        redisManager.addGroupMember(existingGroup.token, [otherUserId]);
+        console.log("After Redis addGroupMember()");
         this.notifyGroupUpdate(existingGroup, "added");
         return existingGroup;
       }
@@ -170,6 +174,7 @@ export class RoomManager {
       if (otherUserGroup) {
         otherUserGroup.members.add(anchorUser.id);
         this.userGroupMap.set(anchorUser.id, otherUserGroupId);
+        redisManager.addGroupMember(otherUserGroup.token, [anchorUser.id]);
         this.notifyGroupUpdate(otherUserGroup, "added");
         return otherUserGroup;
       }
@@ -187,7 +192,8 @@ export class RoomManager {
     // Explicitly map users to their group
     this.userGroupMap.set(anchorUser.id, group.groupId);
     this.userGroupMap.set(otherUserId, group.groupId);
-    
+    //adding the group to redis redis-store
+    redisManager.storeGroupToken(group.token, [...group.members])
     this.notifyGroupUpdate(group, "added");
     console.log(`Group created!!!`);
     return group;
@@ -268,7 +274,7 @@ export class RoomManager {
     added.forEach(addedUserId => {
       console.log(`added users : ${added}`)
       console.log(`Checking proximity group for added users ${addedUserId}`)
-      if (user.id < addedUserId) {
+      if (user.id < addedUserId) {  //handling race condition : leader selection based on smallest Id
         this.createOrUpdateGroup(user, addedUserId);
       }  
     });
@@ -281,12 +287,18 @@ export class RoomManager {
         const currentUserGroup = this.proximityGroups.get(currentUserGroupId);
         if (currentUserGroup && currentUserGroup.members.has(user.id)) {
           currentUserGroup.members.delete(user.id);
+          //remove from redis store
+          redisManager.removeGroupMembers(currentUserGroup.token, [user.id]);
+          console.log("After Redis removeGroupMembers()");
           this.notifyGroupUpdate(currentUserGroup, "removed");
+          
 
           //after removing myself if the group only consist of 1 person than dissolve the group
           if (currentUserGroup.members.size === 1) {
             currentUserGroup.members.clear();
             this.proximityGroups.delete(currentUserGroupId);
+            //delete the group from redis
+            redisManager.deleteGroup(currentUserGroup.token)
             this.notifyGroupUpdate(currentUserGroup, "dissolved");
           }
         }
