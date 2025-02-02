@@ -8,5 +8,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "mediasoup": "^3.15.3",
+    "ws": "^8.18.0",
+    "@types/ws": "^8.5.13"
+  }
 }
