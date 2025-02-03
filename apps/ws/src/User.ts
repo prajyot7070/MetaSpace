@@ -1,7 +1,10 @@
 import { WebSocket } from "ws";
 import client from "@metaSpace/db";
-import { OutgoingMessage } from "./types";
+import { OutgoingMessage, SignalingMessage } from "./types";
 import { RoomManager } from "./RoomManager";
+import { UserManager } from "./UserManager";
+import redisManager from "redis-service";
+import { type } from "os";
 
 function getRandomString(length: number) {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -25,6 +28,7 @@ export class User {
     this.x = 0;
     this.y = 0;
     this.ws = ws;
+    UserManager.getInstance().addUser(this);
     this.initHandlers();
   }
 
@@ -102,7 +106,156 @@ export class User {
           }, this, this.spaceId);
 
           break;
+
+        case "call":
+          if (!this.spaceId) return;
+          const token = parsedData.payload.token;
+          const groupMembers = await redisManager.getGroupMemebers(token);
+          if (!groupMembers || !groupMembers.includes(this.id)) {
+            this.send({
+              type: "call-error",
+              payload: {
+                message: "Invalid token or not in group",
+              }
+            });
+          }
           
+          const rtcResponse = await fetch("http://localhost:3001/create-transport", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token,
+              userId: this.id,
+              sdp: parsedData.payload.sdp
+            })
+          });
+
+          const rtcData = await rtcResponse.json();
+          //Notify other user's of the group about incoming-call
+          for (const memberId of groupMembers) {
+            if (memberId !== this.id) {
+              const member = UserManager.getInstance().getUser(memberId);
+              member?.send({
+                type: "incoming-call",
+                payload: {
+                  token,
+                  callerId: this.id, //add usernames later
+                }
+              });
+            }
+          }
+
+          this.send({
+            type: "call-response",
+            payload: {
+              sdp: rtcData.sdp,
+              transportId: rtcData.transportId
+            }
+          });
+          break;
+
+        case "call-accept":
+          const accepttoken = parsedData.payload.token;
+          const acceptGroupMembers = await redisManager.getGroupMemebers(token);
+          if (!acceptGroupMembers || !acceptGroupMembers.includes(this.id)) {
+            this.send({
+              type: "call-error",
+              payload: {
+                message: "Invalid token or not in group",
+              }
+            });
+          }
+         
+          const acceptResponse = await fetch("http://localhost:3001/create-transport", {
+              method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              token: accepttoken,
+              userId: this.id,
+              sdp: parsedData.payload.sdp
+            })
+            });
+          const acceptData = await acceptResponse.json();
+          // Notify others that this user joined
+          for (const memberId of acceptGroupMembers) {
+            if (memberId !== this.id) {
+              const member = UserManager.getInstance().getUser(memberId);
+              member?.send({
+                type: "user-joined-call",
+                payload: {
+                  userId: this.id,
+                  //userName: this.name
+                }
+              });
+            }
+          }
+
+          //send call-accept response
+          this.send({
+            type: "call-accepted",
+            payload: {
+              sdp: acceptData.sdp,
+              transportId: acceptData.transportId
+            }
+          });
+          break;
+
+        case "call-reject":
+          if (!parsedData.payload.token || !parsedData.payload.callerId) return;
+        
+          const caller = UserManager.getInstance().getUser(parsedData.payload.callerId);
+          caller?.send({
+            type: "call-rejected",
+            payload: {
+              userId: this.id,
+              //userName: this.name
+            }
+          });
+          break;
+
+        case "connect-transport":
+          if (!parsedData.payload.dtslParameters || !parsedData.payload
+          .transportId) {
+            return this.send({
+              type: "transport-error",
+              payload: {
+                message: "Missing DTLS parameters or transportId",
+              }
+            });
+          }
+
+          const connectResponse = await fetch("http://localhost:3001/connect-transport", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              dtlsParameters: parsedData.payload.dtlsParameters,
+              transportId: parsedData.payload.transportId
+            })
+          })
+
+          if (!connectResponse) {
+            return this.send({
+              type: "transport-error",
+              payload: {
+
+                message: "Failed to connect transport"
+              }
+            });
+          }
+
+          this.send({
+            type: "transport-connected"
+          });
+          break;
+
+        case "produce":
+
+          break;
+
+        case "consume":
+
+          break;
+
         default:
           break;
       }
@@ -132,4 +285,6 @@ export class User {
   getY() {
     return this.y;
   }
+
+
 }

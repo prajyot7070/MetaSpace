@@ -141,6 +141,11 @@ export class RoomManager {
   });
   }
 
+  //notify user
+  private notifyUser(userId: string, message: any) {
+    const user = this.rooms
+  }
+
   //Check if user is part of group and return the groupId
   public checkUserGroup(userId: string) {
     return this.userGroupMap.get(userId) || null;
@@ -320,4 +325,5 @@ export class RoomManager {
       });
     }
   }
+
 }
