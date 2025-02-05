@@ -1,8 +1,9 @@
 import WebSocket from "ws";
 import redisManager from "../../redis-service/src";
-import { Worker, Router, WebRtcTransport, Transport, Producer, Consumer, RtpCodecCapability } from "mediasoup/node/lib/types";
+import { Worker, Router, WebRtcTransport, Transport, Producer, Consumer, RtpCodecCapability, MediaKind } from "mediasoup/node/lib/types";
 import { trace } from "console";
 import { transferableAbortSignal } from "util";
+import { throwDeprecation } from "process";
 
 interface TransportInfo {
   transport: WebRtcTransport;
@@ -117,6 +118,79 @@ export class RTCManager {
 
   }
 
+  //Needs to broadcast producerId when new producer is created
+  async produce(roomId: string, userId: string, transportId: string, kind: MediaKind, rtpParameters: any) {
+    const transportInfo = this.rooms.get(roomId);
+    if (!transportInfo) throw new Error("Room not found");
 
+    const producerTransport = transportInfo.producerTransports.get(userId);
+    if (!producerTransport || producerTransport.id !== transportId) {
+      throw new Error("Producer transport not found");
+    }
+    const producer = await producerTransport.produce({ kind: kind, rtpParameters: rtpParameters});
+
+    return { producerId: producer.id };
+  }
+
+  async consume(roomId: string, userId: string, transportId: string, producerId: string, rtpCapabilities: any) {
+    const transportInfo = this.rooms.get(roomId);
+    if (!transportInfo) throw new Error("Room not found");
+    
+    const producer = transportInfo.producers.get(producerId);
+    if (!producer) throw new Error("Producer not found");
+
+    if (!this.router!.canConsume({producerId: producer.id, rtpCapabilities: rtpCapabilities})) {
+      throw new Error("Cannot consume this producer");
+    }
+
+    const consumerTransport = transportInfo.consumerTransports.get(userId);
+    if( !consumerTransport || consumerTransport.id !== transportId) {
+      throw new Error('Consumer transport not found');
+    }
+    const consumer = await consumerTransport.consume({
+      producerId: producer.id,
+      rtpCapabilities: rtpCapabilities,
+      paused: true,
+    });
+
+    transportInfo.consumers.set(consumer.id, consumer);
+
+    return {
+      consumerId: consumer.id,
+      kind: consumer.kind,
+      rtpParameters: consumer.rtpParameters,
+      producerId: consumer.producerId
+    }; 
+  }
+
+  async removeUser(roomId: string, userId: string) {
+    const transportInfo = this.rooms.get(roomId);
+    if (!transportInfo) throw new Error("Room not found");
+    //close user's producer transport
+    const producerTransport = transportInfo.producerTransports.get(userId);
+    if (producerTransport) {
+      await producerTransport.close();
+      transportInfo.producerTransports.delete(userId);
+    }
+    //close user's consumer transport
+    const consumerTransport = transportInfo.consumerTransports.get(userId);
+    if (consumerTransport) {
+      await consumerTransport.close();
+      transportInfo.consumerTransports.delete(userId);
+    } 
+  }
+
+
+  async closeRoom(roomId: string) {
+    const transportInfo = this.rooms.get(roomId);
+    if (!transportInfo) throw new Error("Room not found");
+    for (const transport of transportInfo.producerTransports.values()) {
+      await transport.close();
+    }
+    for (const transport of transportInfo.consumerTransports.values()) {
+      await transport.close();
+    }
+    this.rooms.delete(roomId);
+  }
 
 }
