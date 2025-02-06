@@ -5,8 +5,11 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
+    "prepare": "prisma generate",
+    "prebuild": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "",

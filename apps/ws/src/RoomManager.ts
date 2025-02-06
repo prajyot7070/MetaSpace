@@ -1,8 +1,9 @@
 import * as crypto from 'crypto';
 import { User } from "./User";
 import { OutgoingMessage } from "./types";
-import e from "express";
-import redisManager from "../../redis-service/src";
+//import e from "express";
+import redisManager from 'redis-service';
+
 
 interface VirtualPartition {
   topLeft: { x: number; y: number};
@@ -198,6 +199,9 @@ export class RoomManager {
     this.userGroupMap.set(anchorUser.id, group.groupId);
     this.userGroupMap.set(otherUserId, group.groupId);
     //adding the group to redis redis-store
+    if (!redisManager) {
+      throw new Error("redisManager is undefined. Check import and initialization.");
+    }
     redisManager.storeGroupToken(group.token, [...group.members])
     this.notifyGroupUpdate(group, "added");
     console.log(`Group created!!!`);

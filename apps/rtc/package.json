@@ -1,17 +1,20 @@
 {
-  "name": "rtc",
+  "name": "rtc-service",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@types/ws": "^8.5.13",
     "mediasoup": "^3.15.3",
-    "ws": "^8.18.0",
-    "@types/ws": "^8.5.13"
+    "ws": "^8.18.0"
   }
 }

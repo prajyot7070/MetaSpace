@@ -3,8 +3,8 @@ import client from "@metaSpace/db";
 import { OutgoingMessage, SignalingMessage } from "./types";
 import { RoomManager } from "./RoomManager";
 import { UserManager } from "./UserManager";
-import redisManager from "redis-service";
 import { type } from "os";
+import redisManager from "redis-service";
 
 function getRandomString(length: number) {
     const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
