@@ -218,6 +218,17 @@ export default class GameScene extends Scene {
         const {userId: leavingUserID} = message.payload;
         this.removeUser(leavingUserID);
         console.log(`User ${leavingUserID} left.`);
+        break;
+
+      case 'proximity-group-update':
+        const {groupId, token, members, action} = message.payload;
+        console.log(`Proximity group update : ${action} , \n token : ${token} | groupId : ${groupId} | members : ${members}`);
+        localStorage.setItem('proximityToken',token); //just storing token for now
+        //event dispatching to show the UI bar
+        window.dispatchEvent(new CustomEvent('proximity-group-update', {
+          detail: {token, groupId, members, action}
+        }));
+        break;
     
     }
   }

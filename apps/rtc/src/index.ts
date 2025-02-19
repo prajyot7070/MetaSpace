@@ -1,5 +1,5 @@
 import express from 'express';
-import mediasoup from 'mediasoup';
+import * as mediasoup from 'mediasoup';
 import { RTCManager } from "./RTCManager";
 
 const app = express();
@@ -46,6 +46,16 @@ async function startSFU() {
       res.status(500).json({message: `Internal server error while calling rtcManager.produce() \n${error}`});
     }
   });
+
+  app.post('/consume', async (req, res) => {
+    try {
+      const {roomId, userId, transportId, producerId, rtpCapabilities} = req.body;
+      const result = await rtcManager.consume(roomId, userId, transportId, producerId, rtpCapabilities);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({message: `Internal server error while calling rtcManager.produce() \n${error}`});
+    }
+  })
 
   const port = 3001;
   app.listen(port,() => {

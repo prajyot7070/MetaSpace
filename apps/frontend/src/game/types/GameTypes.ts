@@ -19,6 +19,6 @@ export interface GameConfig {
 }
 
 export type WSMessage = {
-  type: 'join' | 'move' | 'user-joined' | 'user-left' | 'space-joined';
+  type: 'join' | 'move' | 'user-joined' | 'user-left' | 'space-joined' | 'proximity-group-update';
   payload: any;
 }

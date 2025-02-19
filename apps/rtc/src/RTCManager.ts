@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import redisManager from "../../redis-service/src";
+//import redisManager from "../../redis-service/src";
 import { Worker, Router, WebRtcTransport, Transport, Producer, Consumer, RtpCodecCapability, MediaKind } from "mediasoup/node/lib/types";
 import { trace } from "console";
 import { transferableAbortSignal } from "util";

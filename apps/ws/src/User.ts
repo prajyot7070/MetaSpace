@@ -124,9 +124,9 @@ export class User {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              token,
+              roomId: token, // prev- token | after- roomId:token - 1:27pm
               userId: this.id,
-              sdp: parsedData.payload.sdp
+              //sdp: parsedData.payload.sdp
             })
           });
 
@@ -148,8 +148,8 @@ export class User {
           this.send({
             type: "call-response",
             payload: {
-              sdp: rtcData.sdp,
-              transportId: rtcData.transportId
+              producerTransportParams: rtcData.producerTransportParams,
+              consumerTransportParams: rtcData.consumerTransportParams
             }
           });
           break;
@@ -170,9 +170,9 @@ export class User {
               method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
-              token: accepttoken,
+              roomId: accepttoken,
               userId: this.id,
-              sdp: parsedData.payload.sdp
+              //sdp: parsedData.payload.sdp
             })
             });
           const acceptData = await acceptResponse.json();
@@ -194,8 +194,8 @@ export class User {
           this.send({
             type: "call-accepted",
             payload: {
-              sdp: acceptData.sdp,
-              transportId: acceptData.transportId
+              producerTransportParams: acceptData.producerTransportParams,
+              consumerTransportParams: acceptData.consumerTransportParams
             }
           });
           break;
@@ -215,11 +215,11 @@ export class User {
 
         case "connect-transport":
           if (!parsedData.payload.dtslParameters || !parsedData.payload
-          .transportId) {
+          .transportId || !parsedData.payload.token) {
             return this.send({
               type: "transport-error",
               payload: {
-                message: "Missing DTLS parameters or transportId",
+                message: "Missing DTLS parameters, transportId or token",
               }
             });
           }
@@ -228,6 +228,8 @@ export class User {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              roomId: parsedData.payload.token,
+              userId: this.id,
               dtlsParameters: parsedData.payload.dtlsParameters,
               transportId: parsedData.payload.transportId
             })

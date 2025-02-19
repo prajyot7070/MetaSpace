@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { PhoneOff, Video, VideoOff, Mic, MicOff } from "lucide-react";
+import { PhoneOff, Video, VideoOff, Mic, MicOff, PhoneCall } from "lucide-react";
 
 interface OptionsUIBarProps {
-  token: string | null; // Controls visibility
+  show: boolean | null; // Controls visibility
 }
 
-const OptionsUIBar: React.FC<OptionsUIBarProps> = ({ token }) => {
+const OptionsUIBar: React.FC<OptionsUIBarProps> = ({ show }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [videoOn, setVideoOn] = useState(true);
+  const [isOnCall, setCall] = useState(false);
 
-  if (!token) return null; // Hide when no token
+  if (!show) return null; // Hide when no token
 
   return (
     <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white p-3 rounded-2xl shadow-lg flex space-x-6 items-center">
@@ -30,8 +31,10 @@ const OptionsUIBar: React.FC<OptionsUIBarProps> = ({ token }) => {
       </button>
 
       {/* End Call Button */}
-      <button className="p-3 rounded-full bg-red-600 hover:bg-red-500 transition">
-        <PhoneOff className="w-6 h-6" />
+      <button 
+        onClick={() => setCall(!isOnCall)}
+        className="p-3 rounded-full bg-red-600 hover:bg-red-500 transition">
+        {isOnCall ? <PhoneCall className="w-6 h-6"/> : <PhoneOff className="w-6 h-6" />}
       </button>
     </div>
   );
