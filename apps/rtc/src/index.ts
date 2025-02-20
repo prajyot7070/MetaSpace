@@ -57,6 +57,12 @@ async function startSFU() {
     }
   })
 
+  app.get('/routerRTPCapabilities', async(req, res) => {
+    const data = await rtcManager.getRtpCapabilities();
+    console.log(`FROM rtc/src/index.ts | rtpCapabilities :- ${JSON.stringify(data)}`);
+    res.json(data);
+  })
+
   const port = 3001;
   app.listen(port,() => {
     console.log(`SFU server listening on port ${port}`);

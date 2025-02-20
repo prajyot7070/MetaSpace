@@ -108,32 +108,25 @@ export class User {
           break;
 
         case "routerRTPCapabilities":
-    try {
-        const rtpCapabilitiesResponse = await fetch("http://localhost:3001/routerRTPCapabilities"); // Get the response
-        if (!rtpCapabilitiesResponse.ok) { // Check for HTTP errors
-            throw new Error(`HTTP error! status: ${rtpCapabilitiesResponse.status}`);
-        }
-
-        const rtpCapabilities = await rtpCapabilitiesResponse.json(); // Parse the JSON data!!!
-
-        console.log(`FROM User.ts rtpCapabilities :- ${JSON.stringify(rtpCapabilities)}`); // Now you'll see the actual data
-
-        this.send({
+          const rtpCapabilities = await fetch("http://localhost:3001/routerRTPCapabilities");
+          if (!rtpCapabilities.ok) {
+            this.send({
+              type: "rtpCapabilities-error",
+              payload: {
+                message: "Error while fetching routerRTPCapabilities"
+              }
+            });
+          }
+          const data = rtpCapabilities.json();
+          console.log(`FROM User.ts rtpCapabilities :- ${data}`);
+          this.send({
             type: "rtpCapabilities",
             payload: {
-                rtpCapabilities: rtpCapabilities, // Send the parsed JSON data
+              rtpCapabilities: data,
             }
-        });
-    } catch (error) {
-        console.error("Error fetching or parsing rtpCapabilities:", error);
-        this.send({
-            type: "rtpCapabilities-error",
-            payload: {
-                message: "Error while fetching rtpCapabilities", // Send the actual error message
-            }
-        });
-    }
-    break;        case "call":
+          });
+
+        case "call":
           if (!this.spaceId) return;
           const token = parsedData.payload.token;
           const groupMembers = await redisManager.getGroupMemebers(token);

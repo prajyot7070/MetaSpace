@@ -69,6 +69,10 @@ export class RTCManager {
     return transport;
   }
 
+  async getRtpCapabilities() {
+    return this.router?.rtpCapabilities;
+  }
+
   async createTransport(token: string, userId: string) {
     if (!this.router) throw new Error("Router was not initialized");
     let transportInfo = this.rooms.get(token);
