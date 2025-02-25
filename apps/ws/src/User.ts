@@ -277,11 +277,77 @@ export class User {
           break;
 
         case "produce":
+          if (!this.spaceId) return;
+          const { roomId, userId, transportId, kind, rtpParameters } = parsedData.payload;
+          try {
+            //send the produce req to rtc
+            const response = await fetch("http://localhost:3001/produce", {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({
+                roomId,
+                userId,
+                transportId,
+                kind,
+                rtpParameters,
+              }),
+            });
 
+            if (!response) throw new Error("Failed to produce media");
+
+            const data = await response.json();
+
+            this.send({
+              type: "produce-created",
+              payload: {
+                producerId: data.producerId,
+              },
+            });
+          } catch (error) {
+            this.send({
+              type: "produce-error",
+              payload: {
+                message: "Failed to produce media",
+              },
+            });
+          }
           break;
 
         case "consume":
+          if (!this.spaceId) return;
 
+          const { roomId: consumeRoomId, userId: consumeUserId, transportId: consumeTransportId, producerId, rtpCapabilities } = parsedData.payload;
+
+          try {
+            //send req to rtc
+            const response = await fetch("http:localhost:3001/consume", {
+              method: "POST",
+              headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({
+                roomtId: consumeRoomId,
+                userId: consumeUserId,
+                transportId: consumeTransportId,
+                producerId,
+                rtpCapabilities,
+              }),
+            });
+
+            if (!response) throw new Error("Failed to get consumer");
+
+            const data = await response.json();
+            
+            this.send({
+              type: "consumer-created",
+              payload: {
+                consumerId: data.consumerId,
+                producerId: data.producerId,
+                kind: data.kind,
+                rtpParameters: data.rtpParameters,
+              },
+            });
+          } catch (error) {
+            console.error("Error consuming media: ", error); 
+          }
           break;
 
         default:
