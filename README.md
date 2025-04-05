@@ -69,7 +69,7 @@ The project is structured into several key directories:
 
 - [x] Space creation logic
 - [x] WebSocket-based multiplayer
-- [ ] Proximity detection for user interactions
+- [x] Proximity detection for user interactions
 - [ ] WebRTC server for voice and video calling
 - [ ] Enhanced UI/UX design
 
