@@ -1,5 +1,7 @@
 import { Scene } from "phaser";
 import { WSMessage} from "../types/GameTypes";
+import { RTCClient } from "../../rtcClient";
+import { type } from "os";
 
 interface UserData {
   sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
@@ -12,6 +14,7 @@ export default class GameScene extends Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private users!: Map<string, UserData>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private rtcClient: RTCClient;
 
   constructor() {
     super("GameScene");
@@ -36,6 +39,7 @@ export default class GameScene extends Scene {
 
     // Create ws connection
     this.ws = new WebSocket('ws://localhost:8080');
+    this.rtcClient = new RTCClient(this.ws);
 
     // Create tilemap
     const map = this.make.tilemap({ key: 'map_json' });
@@ -78,8 +82,6 @@ export default class GameScene extends Scene {
       // Set collision for the entire layer
       collisionLayer.setCollisionByExclusion([-1]);
       collisionLayer.setVisible(false);
-      
-      
     }
 
     // Create player with physics
@@ -118,21 +120,81 @@ export default class GameScene extends Scene {
     // WebSocket setup
     this.setupWebSocket();
 
+    // Setup RTC event listeners
+    this.setupRTCEventListeners();
+
     //clean up
     window.addEventListener('beforeunload', () => this.cleanup());
+  }
+
+  private setupRTCEventListeners() {
+    // Listen for custom events from Areana component
+    window.addEventListener('start-call', (e: Event) => {
+      const event = e as CustomEvent;
+      const { token, spaceId } = event.detail;
+      if (this.rtcClient && token && spaceId) {
+        this.rtcClient.startCall(token, spaceId);
+      }
+    });
+
+    window.addEventListener('end-call', (e: Event) => {
+      const event = e as CustomEvent;
+      const { token } = event.detail;
+      if (this.rtcClient && token) {
+        this.rtcClient.endCall(token);
+      }
+    });
+
+    window.addEventListener('accept-call', (e: Event) => {
+      const event = e as CustomEvent;
+      const { token, callerId } = event.detail;
+      if (this.rtcClient && token && callerId) {
+        this.rtcClient.acceptCall(token, callerId);
+      }
+    });
+
+    window.addEventListener('decline-call', (e: Event) => {
+      const event = e as CustomEvent;
+      const { token, callerId } = event.detail;
+      if (this.rtcClient && token && callerId) {
+        this.rtcClient.declineCall(token, callerId);
+      }
+    });
+
+    window.addEventListener('produce-tracks', (e: Event) => {
+      const event = e as CustomEvent;
+      const { audioTrack, videoTrack } = event.detail;
+      
+      if (this.rtcClient) {
+        if (audioTrack) {
+          this.rtcClient.produce(audioTrack)
+            .catch(error => console.error("Error producing audio:", error));
+        }
+        
+        if (videoTrack) {
+          this.rtcClient.produce(videoTrack)
+            .catch(error => console.error("Error producing video:", error));
+        }
+      }
+    });
   }
 
   private setupWebSocket() {
     this.ws.onopen = () => {
       console.log('Connected to WebSocket');
+
       this.ws.send(
         JSON.stringify({
           type: 'join',
           payload: {
             spaceId: this.spaceId,
           },
-        })
-      );
+        }));
+
+      this.ws.send(JSON.stringify({
+        type: 'routerRTPCapabilities'
+      }));
+      
     };
 
     this.ws.onmessage = (event) => {
@@ -140,42 +202,16 @@ export default class GameScene extends Scene {
     };
   }
 
-  //Calculate the direction
-  private getDirectionFrame(currentPos: {x: number; y: number}, lastPos: {x: number; y: number}) {
-    const dx = currentPos.x - lastPos.x;
-    const dy = currentPos.y - lastPos.y;
-    const threshold = 1;
-    //debugging
-    //console.log(`dx :- ${Math.abs(dx)} \n dy :- ${Math.abs(dy)}`)
-    if (Math.floor(Math.abs(dx)) < threshold && Math.floor(Math.abs(dy)) < threshold){
-      return -1; //nochange
-    }
-    else if ( Math.abs(dx) > Math.abs(dy)) {
-      return dx > 0 ? 0 : 2;
-    } else {
-      return dy > 0 ? 3 : 1;
-    }
-  }
-
-  //Clean up fn
-  private cleanup() {
-    this.users.forEach((userData, userId) => {
-      this.removeUser(userId);
-    });
-    this.users.clear();
-
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        type: 'leave',
-        payload: { spaceId: this.spaceId }
-      }));
-      this.ws.close();
-    }
-  }
-  
   handleServerMessages(event: MessageEvent) {
     const message: WSMessage = JSON.parse(event.data);
+    
+    // First, check if this is a WebRTC-related message
+    if (this.rtcClient && this.rtcClient.handleSignalingMessage(message)) {
+      // Message was handled by RTCClient
+      return;
+    }
 
+    // Otherwise, handle game-specific messages
     switch (message.type) {
       case 'space-joined':
         console.log("space-joined");
@@ -185,6 +221,7 @@ export default class GameScene extends Scene {
         //this.userId = currUser.id;
         //setting the pos received from the ws
         this.player.setPosition(spawn.x * 16, spawn.y * 16);
+  
         //add existing users to the Scene
         usersList.forEach((user: any) => {
           if (user.id) {
@@ -229,7 +266,23 @@ export default class GameScene extends Scene {
           detail: {token, groupId, members, action}
         }));
         break;
-    
+    }
+  }
+
+  //Calculate the direction
+  private getDirectionFrame(currentPos: {x: number; y: number}, lastPos: {x: number; y: number}) {
+    const dx = currentPos.x - lastPos.x;
+    const dy = currentPos.y - lastPos.y;
+    const threshold = 1;
+    //debugging
+    //console.log(`dx :- ${Math.abs(dx)} \n dy :- ${Math.abs(dy)}`)
+    if (Math.floor(Math.abs(dx)) < threshold && Math.floor(Math.abs(dy)) < threshold){
+      return -1; //nochange
+    }
+    else if ( Math.abs(dx) > Math.abs(dy)) {
+      return dx > 0 ? 0 : 2;
+    } else {
+      return dy > 0 ? 3 : 1;
     }
   }
 
@@ -257,6 +310,28 @@ export default class GameScene extends Scene {
     }
   }
 
+  //Clean up fn
+  private cleanup() {
+    this.users.forEach((userData, userId) => {
+      this.removeUser(userId);
+    });
+    this.users.clear();
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'leave',
+        payload: { spaceId: this.spaceId }
+      }));
+      this.ws.close();
+    }
+
+    // Remove event listeners
+    window.removeEventListener('start-call', () => {});
+    window.removeEventListener('end-call', () => {});
+    window.removeEventListener('accept-call', () => {});
+    window.removeEventListener('decline-call', () => {});
+    window.removeEventListener('produce-tracks', () => {});
+  }
 
   update() {
     if (!this.cursors || !this.player) return;

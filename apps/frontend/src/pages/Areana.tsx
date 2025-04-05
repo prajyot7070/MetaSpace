@@ -1,19 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Phaser from "phaser";
 import GameScene from "../game/scenes/GameScene.ts";
-//import { Device } from "mediasoup-client";
 import { gameConfig } from "../game/config/GameConfig.ts";
 import { useParams } from "react-router-dom";
 import OptionsUIBar from "../components/OptionsUIBar.tsx";
-import { RtpCapabilities } from "mediasoup-client/lib/RtpParameters";
 
 export const Areana = () => {
   const { spaceId } = useParams<{ spaceId: string }>();
   const [showUIBar, setShowUIBar] = useState(false);
   const [groupToken, setGroupToken] = useState<string | null>(null);
-  const [Ws, setWs] = useState<WebSocket | null>(null);
-  //const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [routerRtpCapabilities, setRouterRTPCapabilities] = useState<RtpCapabilities | null>(null);  
+  const [isOnCall, setIsOnCall] = useState(false);
+  const [callError, setCallError] = useState<string | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+
   useEffect(() => {
     if (!spaceId) {
       console.error("Space ID is missing");
@@ -35,36 +36,10 @@ export const Areana = () => {
     const game = new Phaser.Game(config);
     game.registry.set('spaceId', spaceId);
     
-    //Initialize ws connection with signaling server
-    const ws = new WebSocket('ws://localhost:8080');
-    setWs(ws);
-
-    //get RtpCapabilities
-      ws.onopen = () => {
-      console.log("FROM frontend : Connected to WebSocket successfully");
-      ws.send(JSON.stringify({ type: "routerRTPCapabilities" }));
-    };
-
-    ws.onmessage = async (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        switch (message.type) {
-        case 'rtpCapabilities':
-          setRouterRTPCapabilities(message.payload.rtpCapabilities);
-          console.log(`rtpCapabilities :- ${JSON.stringify(routerRtpCapabilities)}`);
-          break;
-        }
-      } catch (error) {
-        console.error("Error parsing message: ", error);
-      };
-        
-    };
-
-          // Event listener setup (moved to useEffect)
+    // Set up event listeners for proximity group updates
     const handleProximityGroupUpdate = (event: CustomEvent) => {
       const { token, groupId, members, action } = event.detail;
-      if (groupToken) { console.log("got groupToken")}
-      console.log(`Proximity group update received : token - ${token} \n groupId - ${groupId} \n members - ${members} \n action - ${action}`); // Fixed typo "aciton" to "action"
+      console.log("Proximity group update received:", token, groupId, members, action);
       if (token) {
         setShowUIBar(true);
         setGroupToken(token);
@@ -73,19 +48,298 @@ export const Areana = () => {
       }
     };
 
-    window.addEventListener('proximity-group-update', handleProximityGroupUpdate as EventListener);
+    // Set up RTC event listeners
+    const handleRemoteTrackAdded = (event: CustomEvent) => {
+      const { track } = event.detail;
+      if (remoteVideoRef.current && track) {
+        const stream = new MediaStream([track]);
+        remoteVideoRef.current.srcObject = stream;
+        setIsOnCall(true);
+      }
+    };
 
+    const handleRTCError = (event: CustomEvent) => {
+      setCallError(event.detail.message || "Unknown call error occurred");
+    };
+
+    const handleIncomingCall = (event: CustomEvent) => {
+      const { token, callerId } = event.detail;
+      const acceptCall = confirm(`Incoming call from ${callerId}. Accept?`);
+      if (acceptCall) {
+        handleAcceptCall(token, callerId);
+      } else {
+        // Decline the call
+        window.dispatchEvent(new CustomEvent('decline-call', {
+          detail: { token, callerId }
+        }));
+      }
+    };
+    
+    const handleCallEnded = () => {
+      setIsOnCall(false);
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        setLocalStream(null);
+      }
+      
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      
+      if (remoteVideoRef.current?.srcObject) {
+        (remoteVideoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+        remoteVideoRef.current.srcObject = null;
+      }
+    };
+
+    const handleTransportsReady = () => {
+ 	    console.log("Transports are ready, now producing media tracks");
+ 	    
+ 	    // Only produce tracks after transports are ready
+ 	    if (localStream) {
+ 	      const audioTrack = localStream.getAudioTracks()[0];
+ 	      const videoTrack = localStream.getVideoTracks()[0];
+ 	      
+ 	      window.dispatchEvent(new CustomEvent('produce-tracks', {
+ 	        detail: {
+ 	          audioTrack,
+ 	          videoTrack
+ 	        }
+ 	      }));
+ 	    }
+ 	  };
+   
+    // Register event listeners
+    window.addEventListener('proximity-group-update', handleProximityGroupUpdate as EventListener);
+    window.addEventListener('remote-track-added', handleRemoteTrackAdded as EventListener);
+    window.addEventListener('rtc-error', handleRTCError as EventListener);
+    window.addEventListener('incoming-call', handleIncomingCall as EventListener);
+    window.addEventListener('call-ended', handleCallEnded as EventListener);
+    window.addEventListener('transports-ready', handleTransportsReady);
 
     return () => {
       game.destroy(true);
-      window.removeEventListener('proximity-group-update', handleProximityGroupUpdate as EventListener); // Important: Remove listener
+      
+      // Clean up media streams
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+      
+      // Remove event listeners
+      window.removeEventListener('proximity-group-update', handleProximityGroupUpdate as EventListener);
+      window.removeEventListener('remote-track-added', handleRemoteTrackAdded as EventListener);
+      window.removeEventListener('rtc-error', handleRTCError as EventListener);
+      window.removeEventListener('incoming-call', handleIncomingCall as EventListener);
+      window.removeEventListener('call-ended', handleCallEnded as EventListener);
     };
   }, [spaceId]);
+
+  const handleStartCall = async () => {
+    if (!groupToken || !spaceId) {
+      setCallError("Missing required parameters for call");
+      return;
+    }
+
+    try {
+      setCallError(null);
+      
+      // Check if browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Your browser doesn't support media devices. Please use a modern browser.");
+      }
+      
+      console.log("Requesting media permissions...");
+      
+      // Try to get user media with more specific error handling
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: true, 
+          video: true 
+        });
+      } catch (err) {
+        // Handle specific permission errors
+        if (err instanceof DOMException) {
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            throw new Error("Camera/microphone access denied. Please allow access to use this feature.");
+          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            throw new Error("No camera or microphone found. Please check your device connections.");
+          } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+            throw new Error("Your camera or microphone is already in use by another application.");
+          }
+        }
+        throw err; // Re-throw if it's another type of error
+      }
+      
+      setLocalStream(stream);
+      
+      // Display local video
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      // Dispatch event to start call via GameScene
+      window.dispatchEvent(new CustomEvent('start-call', {
+        detail: {
+          token: groupToken,
+          spaceId
+        }
+      }));
+      
+//      // Once we have media, dispatch event to produce tracks
+//      const audioTrack = stream.getAudioTracks()[0];
+//      const videoTrack = stream.getVideoTracks()[0];
+//      
+//      window.dispatchEvent(new CustomEvent('produce-tracks', {
+//        detail: {
+//          audioTrack,
+//          videoTrack
+//        }
+//      }));
+//      
+      // Set call as initiated
+      setIsOnCall(true);
+      
+    } catch (error) {
+      console.error("Failed to start call:", error);
+      setCallError(error instanceof Error ? error.message : "Failed to access camera/microphone");
+      
+      // Clean up any partially created stream
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        setLocalStream(null);
+      }
+      
+      setIsOnCall(false);
+    }
+  };
+
+  const handleEndCall = () => {
+    // Dispatch event to end call via GameScene
+    window.dispatchEvent(new CustomEvent('end-call', {
+      detail: {
+        token: groupToken
+      }
+    }));
+    
+    // Clean up local state
+    setIsOnCall(false);
+    setCallError(null);
+
+    // Stop local media streams
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+      setLocalStream(null);
+    }
+
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+
+    // Stop remote media streams
+    if (remoteVideoRef.current?.srcObject) {
+      (remoteVideoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      remoteVideoRef.current.srcObject = null;
+    }
+  };
+
+  const handleAcceptCall = async (token: string, callerId: string) => {
+    if (!spaceId) return;
+
+    try {
+      setCallError(null);
+      
+      // Check if browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Your browser doesn't support media devices. Please use a modern browser.");
+      }
+      
+      // Try to get user media with error handling
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: true, 
+          video: true 
+        });
+      } catch (err) {
+        // Handle specific permission errors
+        if (err instanceof DOMException) {
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            throw new Error("Camera/microphone access denied. Please allow access to use this feature.");
+          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            throw new Error("No camera or microphone found. Please check your device connections.");
+          } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+            throw new Error("Your camera or microphone is already in use by another application.");
+          }
+        }
+        throw err; // Re-throw if it's another type of error
+      }
+      
+      setLocalStream(stream);
+      
+      // Display local video
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      // Dispatch event to accept call via GameScene
+      window.dispatchEvent(new CustomEvent('accept-call', {
+        detail: {
+          token,
+          callerId
+        }
+      }));
+      
+      // Once we have media, dispatch event to produce tracks
+//      const audioTrack = stream.getAudioTracks()[0];
+//      const videoTrack = stream.getVideoTracks()[0];
+//      
+//      window.dispatchEvent(new CustomEvent('produce-tracks', {
+//        detail: {
+//          audioTrack,
+//          videoTrack
+//        }
+//      }));
+      
+      // Set call as initiated
+      setIsOnCall(true);
+      
+    } catch (error) {
+      console.error("Failed to accept call:", error);
+      setCallError(error instanceof Error ? error.message : "Failed to access camera/microphone");
+      
+      // Clean up any partially created stream
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        setLocalStream(null);
+      }
+    }
+  };
 
   return (
     <div className="game-container">
       <div>Arena page</div>
       <div id="phaser-game" />
+      <div className="video-container">
+        {isOnCall && (
+          <>
+            <video ref={localVideoRef} autoPlay muted className="local-video" />
+            <video ref={remoteVideoRef} autoPlay className="remote-video" />
+          </>
+        )}
+      </div>
+      {callError && (
+        <div className="error-message">
+          {callError}
+        </div>
+      )}
+      <OptionsUIBar
+        show={showUIBar}
+        isOnCall={isOnCall}
+        onStartCall={handleStartCall}
+        onEndCall={handleEndCall}
+        error={callError}
+      />
       <style>{`
         .game-container {
           display: flex;
@@ -98,9 +352,32 @@ export const Areana = () => {
           width: 1080px;
           height: 720px;
         }
+        .video-container {
+          display: flex;
+          gap: 10px;
+          margin-top: 10px;
+        }
+        .local-video {
+          width: 240px;
+          height: 180px;
+          border: 1px solid #ccc;
+          background-color: #222;
+        }
+        .remote-video {
+          width: 320px;
+          height: 240px;
+          border: 1px solid #ccc;
+          background-color: #222;
+        }
+        .error-message {
+          background-color: #f8d7da;
+          color: #721c24;
+          padding: 10px;
+          margin: 10px 0;
+          border-radius: 4px;
+          border: 1px solid #f5c6cb;
+        }
       `}</style>
-      <div>
-      <OptionsUIBar show={showUIBar}/>
-      </div>
     </div>
-  );};
+  );
+};

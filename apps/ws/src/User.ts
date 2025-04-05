@@ -18,7 +18,7 @@ function getRandomString(length: number) {
 export class User {
   public id: string;
   private spaceId?: string;
-  private userId?: string;
+  //private userId?: string;
   private x: number;
   private y: number;
   private ws: WebSocket;
@@ -88,12 +88,12 @@ export class User {
 
           const moveX = parsedData.payload.x;
           const moveY = parsedData.payload.y;
-
           // Update position
           this.x = moveX;
           this.y = moveY;
 
           RoomManager.getInstance().updateProximityForUser(this, this.spaceId);
+          //console.log(`Inside case 'move' | this.id - ${this.id}`);
 
           // First broadcast movement to all users in space
           RoomManager.getInstance().broadcast({
@@ -116,7 +116,7 @@ export class User {
 
         const rtpCapabilities = await rtpCapabilitiesResponse.json(); // Parse the JSON data!!!
 
-        console.log(`FROM User.ts rtpCapabilities :- ${JSON.stringify(rtpCapabilities)}`); // Now you'll see the actual data
+        //console.log(`FROM User.ts rtpCapabilities :- ${JSON.stringify(rtpCapabilities)}`); // Now you'll see the actual data
 
         this.send({
             type: "rtpCapabilities",
@@ -133,11 +133,16 @@ export class User {
             }
         });
     }
-    break;        case "call":
-          if (!this.spaceId) return;
+    break;        
+
+        case "call":
+          console.error("REACHED THE Signaling server");
+          //if (!this.spaceId) console.error('spaceId empty');
           const token = parsedData.payload.token;
           const groupMembers = await redisManager.getGroupMemebers(token);
+          console.log(`token : ${token} | groupMembers : ${groupMembers} | this.id : ${this.id}`);
           if (!groupMembers || !groupMembers.includes(this.id)) {
+            console.error("groupMembers or token is Missing");
             this.send({
               type: "call-error",
               payload: {
@@ -145,7 +150,7 @@ export class User {
               }
             });
           }
-          
+          console.log(`Signaling server : call request | token : ${token} | groupMembers: ${groupMembers} | userId : ${this.id}`);
           const rtcResponse = await fetch("http://localhost:3001/create-transport", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -157,6 +162,10 @@ export class User {
           });
 
           const rtcData = await rtcResponse.json();
+
+          //testing logs
+          if (rtcData) {console.log(`Signaling server : transport created!`);}
+
           //Notify other user's of the group about incoming-call
           for (const memberId of groupMembers) {
             if (memberId !== this.id) {

@@ -20,7 +20,12 @@ async function startSFU() {
   app.post('/create-transport', async (req, res) => {
     try {
       const { roomId, userId } = req.body;
+      //testing log
+      console.log(`RTCserver : Creating transports | roomId : ${roomId} | userId : ${userId}`);
       const result = await rtcManager.createTransport(roomId, userId);
+      //testing logs;
+      if (result) { console.log(`RTCserver : Transport created!`);}
+      
       res.json(result);
     } catch (err) {
       res.status(500).json({error: err});
@@ -59,7 +64,7 @@ async function startSFU() {
 
   app.get('/routerRTPCapabilities', async(req, res) => {
     const data = await rtcManager.getRtpCapabilities();
-    console.log(`FROM rtc/src/index.ts | rtpCapabilities :- ${JSON.stringify(data)}`);
+    //console.log(`FROM rtc/src/index.ts | rtpCapabilities :- ${JSON.stringify(data)}`);
     res.json(data);
   })
 

@@ -132,6 +132,7 @@ export class RTCManager {
       throw new Error("Producer transport not found");
     }
     const producer = await producerTransport.produce({ kind: kind, rtpParameters: rtpParameters});
+    transportInfo.producers.set(producer.id, producer);
 
     return { producerId: producer.id };
   }
