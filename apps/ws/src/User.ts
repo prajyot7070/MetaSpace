@@ -184,7 +184,9 @@ export class User {
             type: "call-response",
             payload: {
               producerTransportParams: rtcData.producerTransportParams,
-              consumerTransportParams: rtcData.consumerTransportParams
+              consumerTransportParams: rtcData.consumerTransportParams,
+              roomId: token,
+              userId: this.id
             }
           });
           break;
@@ -249,8 +251,11 @@ export class User {
           break;
 
         case "connect-transport":
-          if (!parsedData.payload.dtslParameters || !parsedData.payload
-          .transportId || !parsedData.payload.token) {
+          console.log(`Inside connect-transport for user ${this.id}`);
+          if (!parsedData.payload.dtlsParameters || !parsedData.payload
+          .transportId || !parsedData.payload.roomId || !parsedData.payload.userId) {
+            console.error(`connect-transport error: Missing dtlsParameters, transportId, token for user ${this.id}`);
+            console.log(`dtlsParameters :- ${parsedData.payload.dtlsParameters} \n transportId :- ${parsedData.payload.transportId} \n roomId :- ${parsedData.payload.roomId} \n userId :- ${parsedData.payload.userId}`);
             return this.send({
               type: "transport-error",
               payload: {
@@ -263,25 +268,28 @@ export class User {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              roomId: parsedData.payload.token,
+              roomId: parsedData.payload.roomId,  //this is empty
               userId: this.id,
               dtlsParameters: parsedData.payload.dtlsParameters,
               transportId: parsedData.payload.transportId
             })
           })
+//
+           if (!connectResponse.ok) {
+              // Log the error status from the RTC server
+              console.error(`connect-transport error: RTC server returned status ${connectResponse.status} for user ${this.id}`);
+              const errorPayload = await connectResponse.json().catch(() => ({ message: "Failed to connect transport on RTC server" })); // Try to get error details
+              return this.send({
+                type: "transport-error",
+                payload: errorPayload // Send back details if possible
+              });
+            }
 
-          if (!connectResponse) {
-            return this.send({
-              type: "transport-error",
-              payload: {
-
-                message: "Failed to connect transport"
-              }
-            });
-          }
+          console.log(`transport-connected successfully for user ${this.id}, connectResponse :- ${connectResponse}`);
 
           this.send({
-            type: "transport-connected"
+            type: "transport-connected",
+            payload: parsedData.payload.transportId
           });
           break;
 
@@ -289,6 +297,7 @@ export class User {
           if (!this.spaceId) return;
           const { roomId, userId, transportId, kind, rtpParameters } = parsedData.payload;
           try {
+            console.log(`Handling produce request: ${JSON.stringify({ roomId, userId, transportId, kind })}`);
             //send the produce req to rtc
             const response = await fetch("http://localhost:3001/produce", {
               method: "POST",
@@ -302,17 +311,41 @@ export class User {
               }),
             });
 
-            if (!response) throw new Error("Failed to produce media");
-
+             if (!response.ok) {
+				      const errorText = await response.text();
+				      console.error(`Failed to produce media: ${response.status} - ${errorText}`);
+				      throw new Error("Failed to produce media");
+				    }
             const data = await response.json();
+            console.log(`Produce successful, got producerId: ${data.producerId}`);
 
             this.send({
-              type: "produce-created",
+              type: "producer-created",
               payload: {
+                transportId: transportId,
                 producerId: data.producerId,
               },
             });
+                // Notify other users about the new producer
+				    if (roomId) {
+				      const groupMembers = await redisManager.getGroupMemebers(roomId);
+				      if (groupMembers) {
+				        for (const memberId of groupMembers) {
+				          if (memberId !== this.id) {
+				            const member = UserManager.getInstance().getUser(memberId);
+				            member?.send({
+				              type: "new-producer",
+				              payload: {
+				                roomId,
+				                producerId: data.producerId
+				              }
+				            });
+				          }
+				        }
+				      }
+				    }
           } catch (error) {
+            console.error("Error in produce handler", error);
             this.send({
               type: "produce-error",
               payload: {
@@ -333,7 +366,7 @@ export class User {
               method: "POST",
               headers: {"Content-Type":"application/json"},
               body: JSON.stringify({
-                roomtId: consumeRoomId,
+                roomId: consumeRoomId,
                 userId: consumeUserId,
                 transportId: consumeTransportId,
                 producerId,

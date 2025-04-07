@@ -12,6 +12,59 @@ export class RTCClient {
     this.ws = webSocketInstance;
   }
 
+  private transportCallbacks: Map<string, { 
+    resolve: () => void, 
+    reject: (error: Error) => void 
+  }> = new Map();
+
+  // New map to handle producer callbacks
+  private producerCallbacks: Map<string, { 
+    resolve: (producerId: { id: string }) => void, 
+    reject: (error: Error) => void 
+  }> = new Map();
+
+  // Helper method to handle transport connection responses
+  private handleTransportConnected(message: any) {
+    const { transportId } = message.payload;
+    const callback = this.transportCallbacks.get(transportId);
+    if (callback) {
+      callback.resolve();
+      this.transportCallbacks.delete(transportId);
+    } else {
+      console.warn(`No callback found for transport ${transportId}`);
+    }
+  }
+
+  // New helper method to handle producer creation responses
+  private handleProducerCreated(message: any) {
+    const { transportId, producerId } = message.payload;
+    console.log(`Producer created with id: ${producerId} for transport: ${transportId}`);
+    const callback = this.producerCallbacks.get(transportId);
+    if (callback) {
+      callback.resolve({ id: producerId });
+      this.producerCallbacks.delete(transportId);
+    } else {
+      console.warn(`No callback found for transport ${transportId}`);
+    }
+  }
+
+  private async withTransportTimeout(
+	  transportId: string,
+	  operation: Promise<void>,
+	  timeoutMs = 10000
+	  ): Promise<void> {
+	  const timeout = new Promise<void>((_, reject) => 
+	    setTimeout(() => reject(new Error('Transport operation timed out')), timeoutMs)
+	  );
+	  
+	  try {
+	    await Promise.race([operation, timeout]);
+	  } catch (error) {
+	    this.transportCallbacks.delete(transportId);
+	    throw error;
+	  }
+  }
+
   // Handle WebRTC signaling messages from the server
   public handleSignalingMessage(message: any) {
     console.log("RTCClient handling message:", message.type);
@@ -34,6 +87,7 @@ export class RTCClient {
         
       case 'transport-connected':
         console.log("Transport connected:", message.payload);
+        this.handleTransportConnected(message);
         window.dispatchEvent(new CustomEvent('transport-connected', {
           detail: message.payload
         }));
@@ -60,6 +114,7 @@ export class RTCClient {
         
       case 'producer-created':
         console.log("Producer created:", message.payload);
+        this.handleProducerCreated(message);
         window.dispatchEvent(new CustomEvent('producer-created', {
           detail: message.payload
         }));
@@ -170,9 +225,18 @@ export class RTCClient {
     console.log(`rtcClient.ts : createSendTransport() - device: ${this.device}`);
     this.producerTransport = this.device?.createSendTransport(transportOptions);
     console.log(`rtcClient.ts : createSendTransport() - producerTransport: ${JSON.stringify(this.producerTransport)}`);
+    this.producerTransport?.on('connectionstatechange', () => {
+      console.log(`Transport ${this.producerTransport!.id} state changed to ${this.producerTransport!.connectionState}`);
+    })
     //subscribe to connect and produce event
     this.producerTransport?.on("connect", async({ dtlsParameters }, callback, errback) => {
       try {
+        console.log(`rtcClient.ts createSendTransport : inside on Connect event`);
+        const transportId = this.producerTransport!.id;
+        this.transportCallbacks.set(transportId, {
+          resolve: callback,
+          reject: errback
+        });
         //send connect-transport
         this.ws?.send(JSON.stringify({
           type: "connect-transport",
@@ -183,47 +247,34 @@ export class RTCClient {
             dtlsParameters,
           },
         }));
-        
-        //wait for signaling server to respond with "transport-connected"
-        const handleTransportConnected = (event: MessageEvent) => {
-          const message = JSON.parse(event.data);
-          if (message.type == "transport-connected") {
-            callback();
-            this.ws?.removeEventListener("message", handleTransportConnected);
-          }
-        };
-
-        this.ws?.addEventListener("message", handleTransportConnected);
       } catch (error: any) {
-        errback(error)
-        console.error(`rtcClient.ts | Error while sending connect transport : ${error}`);
+        errback(error);
       }
     });
 
     this.producerTransport.on("produce", async ({ kind, rtpParameters }, callback, errback) => {
       try {
+        console.log(`rtcClient.ts createSendTransport : inside on Produce event`);
+        const transportId = this.producerTransport!.id;
+        
+        // Store callback in the map to be resolved when producer-created message is received
+        this.producerCallbacks.set(transportId, {
+          resolve: callback,
+          reject: errback
+        });
+
         // Send produce request to the SFU
-         this.ws?.send(JSON.stringify({
+        this.ws?.send(JSON.stringify({
           type: "produce",
           payload: {
             roomId: transportOptions.roomId,
             userId: transportOptions.userId,
-            transportId: this.producerTransport?.id,
+            transportId: transportId,
             kind,
             rtpParameters,
           },
         }));
 
-        // Wait for the signaling server to respond with the producer ID
-        const handleProducerCreated = (event: MessageEvent) => {
-          const message = JSON.parse(event.data);
-          if (message.type === "producer-created") {
-            callback({ id: message.payload.producerId }); // Notify the transport of the producer ID
-            this.ws?.removeEventListener("message", handleProducerCreated);
-          }
-        };
-
-        this.ws?.addEventListener("message", handleProducerCreated);      
       } catch (error: any) {
         errback(error);
       }
@@ -233,62 +284,102 @@ export class RTCClient {
   }
 
   public async createRecvTransport(transportOptions: any) {
-    if (!this.device) throw new Error("Device not initialized");
+  if (!this.device) throw new Error("Device not initialized");
+  console.log(`rtcClient.ts : createRecvTransport() - Creating recvTransport`);
+  this.consumerTransport = this.device.createRecvTransport(transportOptions);
+  console.log(`rtcClient.ts : createRecvTransport() - consumerTransport created: ${this.consumerTransport.id}`);
 
-    this.consumerTransport = this.device.createRecvTransport(transportOptions);
+  // Handle transport events with better logging
+  this.consumerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
+    try {
+      console.log(`rtcClient.ts createRecvTransport : inside on connect event for ${this.consumerTransport!.id}`);
+      const transportId = this.consumerTransport!.id;
+      this.transportCallbacks.set(transportId, {
+        resolve: callback,
+        reject: errback
+      });
+      console.log(`Stored callback for recvTransport ${transportId}`);
+      
+      // Send connect-transport request to the signaling server
+      this.ws?.send(JSON.stringify({
+        type: "connect-transport",
+        payload: {
+          roomId: transportOptions.roomId,
+          userId: transportOptions.userId,
+          transportId: transportId,
+          dtlsParameters,
+        },
+      }));
+      console.log(`Sent connect-transport request for recvTransport ${transportId}`);
+    } catch (error: any) {
+      console.error(`Error in recvTransport connect event:`, error);
+      errback(error); // Notify the transport of the error
+    }
+  });
 
-    // Handle transport events
-    this.consumerTransport.on("connect", async ({ dtlsParameters }, callback, errback) => {
-      try {
-        // Send connect-transport request to the signaling server
-        this.ws?.send(JSON.stringify({
-          type: "connect-transport",
-          payload: {
-            roomId: transportOptions.roomId,
-            userId: transportOptions.userId,
-            transportId: this.consumerTransport?.id,
-            dtlsParameters,
-          },
-        }));
-
-        // Wait for the signaling server to respond with "transport-connected"
-        const handleTransportConnected = (event: MessageEvent) => {
-          const message = JSON.parse(event.data);
-          if (message.type === "transport-connected") {
-            callback(); // Notify the transport that the connection was successful
-            this.ws?.removeEventListener("message", handleTransportConnected);
-          }
-        };
-
-        this.ws?.addEventListener("message", handleTransportConnected);
-      } catch (error: any) {
-        errback(error); // Notify the transport of the error
-      }
-    });
-
-    return this.consumerTransport;
-  }
+  return this.consumerTransport;
+}
 
 	public async produce(track: MediaStreamTrack) {
-	  if (!this.producerTransport) {
-	    const error = new Error("Producer transport not initialized");
-	    window.dispatchEvent(new CustomEvent('rtc-error', {
-	      detail: { message: "Call setup incomplete. Please try again." }
-	    }));
-	    throw error;
-	  }
-	
-	  try {
-	    const producer = await this.producerTransport.produce({
-	      track,
-	    });
-	    console.log("Producer created:", producer.id);
-	    return producer;
-	  } catch (error) {
-	    console.error("Error producing track:", error);
-	    throw error;
-	  }
-	}  
+  console.log(`Inside rtcClient.ts produce()`);
+
+  if (!this.producerTransport) {
+    const error = new Error("Producer transport not initialized");
+    window.dispatchEvent(new CustomEvent('rtc-error', {
+      detail: { message: "Call setup incomplete. Please try again." }
+    }));
+    throw error;
+  }
+
+  // Wait for transport to be connected
+  if (this.producerTransport.connectionState !== 'connected') {
+    console.log(`Waiting for producer transport to connect (current state: ${this.producerTransport.connectionState})`);
+    
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Transport connection timed out'));
+      }, 10000); // 10 second timeout
+
+      const checkState = () => {
+        if (this.producerTransport?.connectionState === 'connected') {
+          clearTimeout(timeout);
+          resolve();
+        } else if (this.producerTransport?.connectionState === 'failed') {
+          clearTimeout(timeout);
+          reject(new Error('Transport connection failed'));
+        }
+      };
+
+      // Check immediately
+      checkState();
+
+      // Set up state change listener
+      this.producerTransport.on('connectionstatechange', checkState);
+    });
+  }
+
+  if (!track) {
+    console.error("RTCClient: Cannot produce - track is invalid.");
+    throw new Error("Invalid track provided");
+  }
+
+  console.log(`RTCClient: Attempting to produce track ${track.id}`);
+  
+  try {
+    console.log(`Creating producer`);
+    const producer = await this.producerTransport.produce({
+      track,
+    });
+    console.log("Producer created:", producer.id);
+    return producer;
+  } catch (error) {
+    console.error("Error producing track:", error);
+    window.dispatchEvent(new CustomEvent('rtc-error', {
+      detail: { message: 'Failed to produce media track' }
+    }));
+    throw error;
+  }
+} 
 
   public async consume(producerId: string, rtpCapabilities: RtpCapabilities) {
     if (!this.consumerTransport) throw new Error("Consumer transport not initialized");

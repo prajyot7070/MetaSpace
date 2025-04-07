@@ -35,9 +35,11 @@ async function startSFU() {
   app.post('/connect-transport', async (req, res) => {
     try {
       const { roomId, userId, transportId, dtlsParameters }  = req.body;
+      console.log(`Connecting transport: ${transportId} for user ${userId} in room ${roomId}`);
       await rtcManager.connectTransport(roomId, userId, transportId, dtlsParameters);
-      res.json(200).json({message: "Transport connected successfully"});
+      res.status(200).json({message: "Transport connected successfully"});
     } catch (error) {
+      console.error("Error connecting transport:", error);
       res.status(500).json({message: "Internal server error while connecting transport"});
     }
   });

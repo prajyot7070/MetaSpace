@@ -4,6 +4,7 @@ import GameScene from "../game/scenes/GameScene.ts";
 import { gameConfig } from "../game/config/GameConfig.ts";
 import { useParams } from "react-router-dom";
 import OptionsUIBar from "../components/OptionsUIBar.tsx";
+import { resolve } from "path";
 
 export const Areana = () => {
   const { spaceId } = useParams<{ spaceId: string }>();
@@ -14,7 +15,9 @@ export const Areana = () => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-
+  const [areTransportsReady, setAreTransportsReady] = useState(false);
+  const streamRef = useRef<MediaStream | null>(null);
+  let stream : MediaStream;
   useEffect(() => {
     if (!spaceId) {
       console.error("Space ID is missing");
@@ -92,21 +95,24 @@ export const Areana = () => {
       }
     };
 
-    const handleTransportsReady = () => {
- 	    console.log("Transports are ready, now producing media tracks");
- 	    
+    const handleTransportsReady = async (e: Event) => {
+ 	    console.log("Event 'transports-ready' received");
+      const currentStream = streamRef.current;
+      await new Promise(resolve => setTimeout(resolve, 100));
  	    // Only produce tracks after transports are ready
- 	    if (localStream) {
- 	      const audioTrack = localStream.getAudioTracks()[0];
- 	      const videoTrack = localStream.getVideoTracks()[0];
- 	      
+ 	    if (currentStream) {
+ 	      const audioTrack = currentStream.getAudioTracks()[0];
+ 	      const videoTrack = currentStream.getVideoTracks()[0];
+ 	      console.log(`Dispatching 'produce-tracks' events`)
  	      window.dispatchEvent(new CustomEvent('produce-tracks', {
  	        detail: {
  	          audioTrack,
  	          videoTrack
  	        }
  	      }));
- 	    }
+ 	    } else {
+        console.log(`currentStream is empty : ${currentStream}`)
+      }
  	  };
    
     // Register event listeners
@@ -151,12 +157,12 @@ export const Areana = () => {
       console.log("Requesting media permissions...");
       
       // Try to get user media with more specific error handling
-      let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ 
           audio: true, 
           video: true 
         });
+        console.log(`handleStartCall : stream - ${JSON.stringify(stream.getTracks())}`);
       } catch (err) {
         // Handle specific permission errors
         if (err instanceof DOMException) {
@@ -170,8 +176,10 @@ export const Areana = () => {
         }
         throw err; // Re-throw if it's another type of error
       }
-      
+      console.log(`setting localStream`);
       setLocalStream(stream);
+      streamRef.current = stream;
+      console.log(`localStream set! :- ${localStream}`);
       
       // Display local video
       if (localVideoRef.current) {

@@ -162,6 +162,7 @@ export default class GameScene extends Scene {
     });
 
     window.addEventListener('produce-tracks', (e: Event) => {
+      console.log(`Inside produce tracks`)
       const event = e as CustomEvent;
       const { audioTrack, videoTrack } = event.detail;
       
@@ -169,12 +170,18 @@ export default class GameScene extends Scene {
         if (audioTrack) {
           this.rtcClient.produce(audioTrack)
             .catch(error => console.error("Error producing audio:", error));
+        } else {
+          console.log(`Something wrong with audioTrack :- ${audioTrack}`);
         }
+        //console.log(`audioTrack produced successfully`)
         
         if (videoTrack) {
           this.rtcClient.produce(videoTrack)
             .catch(error => console.error("Error producing video:", error));
+        } else {
+          console.log(`Something wrong with videoTrack :- ${videoTrack}`);
         }
+        //console.log(`videoTrack produced successfully`)
       }
     });
   }
