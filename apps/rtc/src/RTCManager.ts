@@ -153,23 +153,51 @@ export class RTCManager {
 
   async consume(roomId: string, userId: string, transportId: string, producerId: string, rtpCapabilities: any) {
     const transportInfo = this.rooms.get(roomId);
-    if (!transportInfo) throw new Error("Room not found");
+    if (!transportInfo) {
+      console.error("[RTCManager] Room not found:", roomId);
+      throw new Error("Room not found");
+    }
     
     const producer = transportInfo.producers.get(producerId);
-    if (!producer) throw new Error("Producer not found");
+    if (!producer) {
+      console.error("[RTCManager] Producer not found:", producerId);
+      throw new Error("Producer not found");
+    }
+
+    console.log("[RTCManager] Attempting to create consumer:", {
+      roomId,
+      userId,
+      transportId,
+      producerId,
+      hasRtpCapabilities: !!rtpCapabilities
+    });
 
     if (!this.router!.canConsume({producerId: producer.id, rtpCapabilities: rtpCapabilities})) {
+      console.error("[RTCManager] Cannot consume - incompatible RTP capabilities");
       throw new Error("Cannot consume this producer");
     }
 
     const consumerTransport = transportInfo.consumerTransports.get(userId);
-    if( !consumerTransport || consumerTransport.id !== transportId) {
+    if (!consumerTransport || consumerTransport.id !== transportId) {
+      console.error("[RTCManager] Consumer transport not found or ID mismatch:", {
+        expected: transportId,
+        found: consumerTransport?.id,
+        userId
+      });
       throw new Error('Consumer transport not found');
     }
+
+    console.log("[RTCManager] Creating consumer with transport:", consumerTransport.id);
     const consumer = await consumerTransport.consume({
       producerId: producer.id,
       rtpCapabilities: rtpCapabilities,
       paused: true,
+    });
+
+    console.log("[RTCManager] Consumer created successfully:", {
+      consumerId: consumer.id,
+      kind: consumer.kind,
+      producerId: consumer.producerId
     });
 
     transportInfo.consumers.set(consumer.id, consumer);

@@ -38,8 +38,7 @@ export default class GameScene extends Scene {
     this.physics.world.setBounds(0, 0, 3200, 3200); // Adjust bounds as needed
 
     // Create ws connection
-    this.ws = new WebSocket('ws://localhost:8080');
-    this.rtcClient = new RTCClient(this.ws);
+    this.setupWebSocket();
 
     // Create tilemap
     const map = this.make.tilemap({ key: 'map_json' });
@@ -116,9 +115,6 @@ export default class GameScene extends Scene {
     if (foregroundLayer) {
       foregroundLayer.setDepth(1);
     }
-
-    // WebSocket setup
-    this.setupWebSocket();
 
     // Setup RTC event listeners
     this.setupRTCEventListeners();
@@ -197,8 +193,18 @@ export default class GameScene extends Scene {
   }
 
   private setupWebSocket() {
+    this.ws = new WebSocket('ws://localhost:8080');
+    
     this.ws.onopen = () => {
-      console.log('Connected to WebSocket');
+      console.log('[GameScene] Connected to WebSocket');
+      
+      // Initialize RTCClient after WebSocket connection is established
+      this.rtcClient = new RTCClient(this.ws);
+      
+      // Notify Arena component that RTCClient is ready
+      window.dispatchEvent(new CustomEvent('rtc-client-ready', {
+        detail: { rtcClient: this.rtcClient }
+      }));
 
       this.ws.send(
         JSON.stringify({
@@ -211,11 +217,20 @@ export default class GameScene extends Scene {
       this.ws.send(JSON.stringify({
         type: 'routerRTPCapabilities'
       }));
-      
     };
 
     this.ws.onmessage = (event) => {
       this.handleServerMessages(event);
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('[GameScene] WebSocket error:', error);
+    };
+
+    this.ws.onclose = () => {
+      console.log('[GameScene] WebSocket connection closed');
+      // Notify that RTCClient is no longer available
+      window.dispatchEvent(new CustomEvent('rtc-client-disconnected'));
     };
   }
 

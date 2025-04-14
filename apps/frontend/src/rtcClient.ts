@@ -7,6 +7,10 @@ export class RTCClient {
   private routerRtpCapabilities: RtpCapabilities | null = null;
   private producerTransport: Transport | undefined = undefined;
   private consumerTransport: Transport | undefined = undefined;
+  private consumers: Map<string, Consumer> = new Map();
+  private onVideoTrack?: (track: MediaStreamTrack) => void;
+  private onAudioTrack?: (track: MediaStreamTrack) => void;
+  private pendingProducers: Array<{roomId: string, producerId: string}> = [];
   
   constructor(webSocketInstance: WebSocket) {
     this.ws = webSocketInstance;
@@ -72,6 +76,9 @@ export class RTCClient {
     switch (message.type) {
       case 'rtpCapabilities':
         this.initializeDevice(message.payload.rtpCapabilities)
+          .then(() => {
+            console.log("[RTCClient] Device initialized successfully");
+          })
           .catch(error => {
             console.error("[RTCClient] Failed to initialize device:", error);
             window.dispatchEvent(new CustomEvent('rtc-error', {
@@ -82,7 +89,28 @@ export class RTCClient {
         
       case 'call-response':
         console.log("[RTCClient] Call response received with transport params", message.payload);
-        this.handleCallResponse(message.payload);
+        this.handleCallResponse(message.payload)
+          .then(() => {
+            // Process any pending producers after transports are created
+            if (this.pendingProducers.length > 0) {
+              console.log("[RTCClient] Processing pending producers:", this.pendingProducers);
+              this.pendingProducers.forEach(producer => {
+                if (this.device?.rtpCapabilities && this.consumerTransport) {
+                  this.sendMessage({
+                    type: "consume",
+                    payload: {
+                      roomId: producer.roomId,
+                      userId: this.consumerTransport.appData.userId,
+                      transportId: this.consumerTransport.id,
+                      producerId: producer.producerId,
+                      rtpCapabilities: this.device.rtpCapabilities
+                    }
+                  });
+                }
+              });
+              this.pendingProducers = [];
+            }
+          });
         break;
         
       case 'call-accepted':
@@ -121,27 +149,44 @@ export class RTCClient {
         
       case 'new-producer':
         console.log("[RTCClient] New producer message received:", message.payload);
-        if (this.device && this.device.loaded && this.consumerTransport) {
-          const { roomId, producerId } = message.payload;
-          console.log("[RTCClient] Sending consume request with:", {
+        if (!this.device?.loaded) {
+          console.error("[RTCClient] Device not initialized");
+          return;
+        }
+        if (!this.consumerTransport) {
+          console.log("[RTCClient] Consumer transport not initialized, queuing producer");
+          this.pendingProducers.push({
+            roomId: message.payload.roomId,
+            producerId: message.payload.producerId
+          });
+          return;
+        }
+
+        // Check if device has RTP capabilities
+        if (!this.device.rtpCapabilities) {
+          console.error("[RTCClient] Device RTP capabilities not available");
+          return;
+        }
+
+        const { roomId, producerId } = message.payload;
+        console.log("[RTCClient] Sending consume request with:", {
+          roomId,
+          userId: this.consumerTransport.appData.userId,
+          transportId: this.consumerTransport.id,
+          producerId,
+          rtpCapabilities: this.device.rtpCapabilities
+        });
+        
+        this.sendMessage({
+          type: "consume",
+          payload: {
             roomId,
             userId: this.consumerTransport.appData.userId,
             transportId: this.consumerTransport.id,
-            producerId
-          });
-          this.sendMessage({
-            type: "consume",
-            payload: {
-              roomId,
-              userId: this.consumerTransport.appData.userId,
-              transportId: this.consumerTransport.id,
-              producerId,
-              rtpCapabilities: this.device.rtpCapabilities
-            }
-          });
-        } else {
-          console.error("[RTCClient] Cannot consume - device or transport not ready");
-        }
+            producerId,
+            rtpCapabilities: this.device.rtpCapabilities
+          }
+        });
         break;
         
       case 'consumer-created':
@@ -215,7 +260,7 @@ export class RTCClient {
           userId: payload.userId
         }
       });
-      console.log("[RTCClient] Send transport created");
+      console.log("[RTCClient] Send transport created with ID:", sendTransport.id);
       
       // Create receive transport using the parameters from the server
       console.log("[RTCClient] Creating receive transport...");
@@ -231,14 +276,39 @@ export class RTCClient {
           userId: payload.userId
         }
       });
-      console.log("[RTCClient] Receive transport created");
+      console.log("[RTCClient] Receive transport created with ID:", recvTransport.id);
       
-      console.log("[RTCClient] WebRTC transports created successfully");
-      
+      // Process any pending producers
+      if (this.pendingProducers.length > 0) {
+        console.log("[RTCClient] Processing pending producers:", this.pendingProducers.length);
+        for (const producer of this.pendingProducers) {
+          console.log("[RTCClient] Processing queued producer:", producer);
+          if (this.device?.rtpCapabilities && this.consumerTransport) {
+            this.sendMessage({
+              type: "consume",
+              payload: {
+                roomId: producer.roomId,
+                userId: this.consumerTransport.appData.userId,
+                transportId: this.consumerTransport.id,
+                producerId: producer.producerId,
+                rtpCapabilities: this.device.rtpCapabilities
+              }
+            });
+          } else {
+            console.error("[RTCClient] Cannot process queued producer - missing capabilities or transport");
+          }
+        }
+        this.pendingProducers = [];
+      } else {
+        console.log("[RTCClient] No pending producers to process");
+      }
+
       // Notify UI that transports are ready to produce
       window.dispatchEvent(new CustomEvent('rtc-ready-to-produce', {
         detail: payload
       }));
+
+      console.log("[RTCClient] Transport creation completed successfully");
     } catch (error) {
       console.error("[RTCClient] Failed to create transports:", error);
       window.dispatchEvent(new CustomEvent('rtc-error', {
@@ -247,61 +317,104 @@ export class RTCClient {
     }
   }
   
-  private async handleConsumerCreated(payload: any) {
+  private async handleConsumerCreated(data: any) {
     try {
+      console.log("[RTCClient] Handling consumer creation:", {
+        consumerId: data.consumerId,
+        producerId: data.producerId,
+        kind: data.kind,
+        hasRtpCapabilities: !!this.device?.rtpCapabilities
+      });
+
       if (!this.consumerTransport) {
-        console.error("[RTCClient] Consumer transport not initialized, waiting for transport...");
-        
-        // Add a retry mechanism with more time and multiple attempts
-        let attempts = 0;
-        const maxAttempts = 5;
-        while (!this.consumerTransport && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          attempts++;
-          console.log(`[RTCClient] Waiting for consumer transport, attempt ${attempts}/${maxAttempts}`);
-        }
-        
-        if (!this.consumerTransport) {
-          throw new Error("Consumer transport not initialized after multiple attempts");
-        }
-      }
-      
-      console.log("[RTCClient] Creating consumer with payload:", payload);
-      
-      if (!payload.consumerId || !payload.producerId || !payload.rtpParameters) {
-        throw new Error("Invalid consumer payload");
+        console.error("[RTCClient] Cannot create consumer - transport not initialized");
+        return;
       }
 
-      const consumer = await this.consumerTransport.consume({
-        id: payload.consumerId,
-        producerId: payload.producerId,
-        kind: payload.kind,
-        rtpParameters: payload.rtpParameters,
+      if (!this.device?.rtpCapabilities) {
+        console.error("[RTCClient] Cannot create consumer - RTP capabilities not initialized");
+        return;
+      }
+
+      const { producerId, consumerId, kind, rtpParameters } = data;
+      
+      // Check if we already have this consumer
+      if (this.consumers.has(consumerId)) {
+        console.log("[RTCClient] Consumer already exists:", consumerId);
+        return;
+      }
+
+      console.log("[RTCClient] Creating consumer with parameters:", {
+        id: consumerId,
+        producerId,
+        kind,
+        rtpParametersType: rtpParameters.type
       });
-      
-      console.log("[RTCClient] Consumer created successfully:", consumer.id);
-      
+
+      const consumer = await this.consumerTransport.consume({
+        id: consumerId,
+        producerId,
+        kind,
+        rtpParameters,
+        appData: { ...data.appData }
+      });
+
+      console.log("[RTCClient] Consumer created successfully:", {
+        consumerId: consumer.id,
+        kind: consumer.kind,
+        track: consumer.track?.enabled
+      });
+
+      this.consumers.set(consumer.id, consumer);
+
       // Resume the consumer immediately
-      await consumer.resume();
-      
-      window.dispatchEvent(new CustomEvent('remote-track-added', {
-        detail: { 
-          track: consumer.track,
-          consumer,
-          kind: payload.kind
+      try {
+        console.log("[RTCClient] Resuming consumer:", consumer.id);
+        await consumer.resume();
+        console.log("[RTCClient] Consumer resumed successfully");
+
+        // Send consumer-ready message to server
+        await this.sendMessage({
+          type: "consumer-ready",
+          payload: {
+            roomId: data.roomId,
+            userId: data.userId,
+            consumerId: consumer.id,
+            producerId: data.producerId
+          }
+        });
+
+        // Only dispatch event if we have a track
+        if (consumer.track) {
+          console.log("[RTCClient] Dispatching track event:", {
+            trackId: consumer.track.id,
+            kind: consumer.track.kind,
+            enabled: consumer.track.enabled,
+            readyState: consumer.track.readyState
+          });
+
+          window.dispatchEvent(new CustomEvent('consumer-track-ready', {
+            detail: {
+              track: consumer.track,
+              kind: consumer.kind
+            }
+          }));
+        } else {
+          console.warn("[RTCClient] Consumer created without track");
         }
-      }));
-      
-      return consumer;
+      } catch (error) {
+        console.error("[RTCClient] Error resuming consumer:", error);
+        throw error;
+      }
+
     } catch (error) {
-      console.error("[RTCClient] Failed to consume remote track:", error);
+      console.error("[RTCClient] Failed to create consumer:", error);
       window.dispatchEvent(new CustomEvent('rtc-error', {
-        detail: { message: "Failed to consume remote track" }
+        detail: { message: "Failed to create consumer" }
       }));
-      throw error;
     }
   }
-  
+
   ///Initialize the mediasoup device
   public async initializeDevice(rtpCapabilities: RtpCapabilities) {
     try {
@@ -313,13 +426,15 @@ export class RTCClient {
       console.log("[RTCClient] Creating new device instance...");
       this.device = new Device();
       
-      console.log("[RTCClient] Loading device with RTP capabilities...");
+      console.log("[RTCClient] Loading device with RTP capabilities:", rtpCapabilities);
       await this.device.load({ routerRtpCapabilities: rtpCapabilities });
       console.log("[RTCClient] Device initialized successfully");
       
       window.dispatchEvent(new CustomEvent('device-initialized', {
         detail: { device: this.device }
       }));
+
+      return this.device;
     } catch (error) {
       console.error("[RTCClient] Failed to initialize device:", error);
       throw error;
