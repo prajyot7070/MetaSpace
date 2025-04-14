@@ -108,18 +108,32 @@ export class RTCManager {
   }
 
   async connectTransport(roomId: string, userId: string, transportId: string, dtlsParameters: any) {
-   const transportInfo = this.rooms.get(roomId); 
-    if (!transportInfo) throw new Error("Room not found");
+    console.log(`Connecting transport: ${transportId} for user ${userId} in room ${roomId}`);
+    const transportInfo = this.rooms.get(roomId); 
+    if (!transportInfo) {
+      console.error(`Room ${roomId} not found`);
+      throw new Error("Room not found");
+    }
 
-    const transport = transportInfo.producerTransports.get(userId)?.id === transportId    ? transportInfo.producerTransports.get(userId)
-    : transportInfo.consumerTransports.get(userId)?.id === transportId
-    ? transportInfo.consumerTransports.get(userId)
-    : undefined;
+    const transport = transportInfo.producerTransports.get(userId)?.id === transportId
+      ? transportInfo.producerTransports.get(userId)
+      : transportInfo.consumerTransports.get(userId)?.id === transportId
+        ? transportInfo.consumerTransports.get(userId)
+        : undefined;
 
-    if (!transport) throw new Error("Transport not found");
+    if (!transport) {
+      console.error(`Transport ${transportId} not found for user ${userId}`);
+      throw new Error("Transport not found");
+    }
 
-    await transport.connect({dtlsParameters});
-
+    try {
+      console.log(`Attempting to connect transport ${transportId}`);
+      await transport.connect({dtlsParameters});
+      console.log(`Successfully connected transport ${transportId}`);
+    } catch (error) {
+      console.error(`Error connecting transport ${transportId}:`, error);
+      throw error;
+    }
   }
 
   //Needs to broadcast producerId when new producer is created

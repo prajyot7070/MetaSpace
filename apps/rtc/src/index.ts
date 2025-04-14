@@ -35,7 +35,7 @@ async function startSFU() {
   app.post('/connect-transport', async (req, res) => {
     try {
       const { roomId, userId, transportId, dtlsParameters }  = req.body;
-      console.log(`Connecting transport: ${transportId} for user ${userId} in room ${roomId}`);
+      console.log(`RTCserver : Connecting transport: ${transportId} for user ${userId} in room ${roomId}`);
       await rtcManager.connectTransport(roomId, userId, transportId, dtlsParameters);
       res.status(200).json({message: "Transport connected successfully"});
     } catch (error) {

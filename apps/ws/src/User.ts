@@ -192,8 +192,8 @@ export class User {
           break;
 
         case "call-accept":
-          const accepttoken = parsedData.payload.token;
-          const acceptGroupMembers = await redisManager.getGroupMemebers(token);
+          const acceptToken = parsedData.payload.token;
+          const acceptGroupMembers = await redisManager.getGroupMemebers(acceptToken);
           if (!acceptGroupMembers || !acceptGroupMembers.includes(this.id)) {
             this.send({
               type: "call-error",
@@ -207,9 +207,8 @@ export class User {
               method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
-              roomId: accepttoken,
+              roomId: acceptToken,
               userId: this.id,
-              //sdp: parsedData.payload.sdp
             })
             });
           const acceptData = await acceptResponse.json();
@@ -221,7 +220,6 @@ export class User {
                 type: "user-joined-call",
                 payload: {
                   userId: this.id,
-                  //userName: this.name
                 }
               });
             }
@@ -232,7 +230,9 @@ export class User {
             type: "call-accepted",
             payload: {
               producerTransportParams: acceptData.producerTransportParams,
-              consumerTransportParams: acceptData.consumerTransportParams
+              consumerTransportParams: acceptData.consumerTransportParams,
+              roomId: acceptToken,
+              userId: this.id
             }
           });
           break;
@@ -289,7 +289,9 @@ export class User {
 
           this.send({
             type: "transport-connected",
-            payload: parsedData.payload.transportId
+            payload: { 
+              transportId: parsedData.payload.transportId 
+            }
           });
           break;
 
@@ -361,10 +363,22 @@ export class User {
           const { roomId: consumeRoomId, userId: consumeUserId, transportId: consumeTransportId, producerId, rtpCapabilities } = parsedData.payload;
 
           try {
-            //send req to rtc
-            const response = await fetch("http:localhost:3001/consume", {
+            // Validate required parameters
+            if (!consumeRoomId || !consumeUserId || !consumeTransportId || !producerId || !rtpCapabilities) {
+              throw new Error("Missing required parameters for consume request");
+            }
+
+            console.log("[User] Handling consume request:", {
+              roomId: consumeRoomId,
+              userId: consumeUserId,
+              transportId: consumeTransportId,
+              producerId
+            });
+
+            // Send request to RTC server
+            const response = await fetch("http://localhost:3001/consume", {
               method: "POST",
-              headers: {"Content-Type":"application/json"},
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 roomId: consumeRoomId,
                 userId: consumeUserId,
@@ -374,10 +388,19 @@ export class User {
               }),
             });
 
-            if (!response) throw new Error("Failed to get consumer");
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error("[User] RTC server consume error:", errorText);
+              throw new Error(`Failed to get consumer: ${response.statusText}`);
+            }
 
             const data = await response.json();
+            console.log("[User] Consumer created:", data);
             
+            if (!data.consumerId || !data.producerId || !data.rtpParameters) {
+              throw new Error("Invalid consumer data received from RTC server");
+            }
+
             this.send({
               type: "consumer-created",
               payload: {
@@ -388,7 +411,19 @@ export class User {
               },
             });
           } catch (error) {
-            console.error("Error consuming media: ", error); 
+            console.error("[User] Error consuming media:", error);
+            this.send({
+              type: "consumer-error",
+              payload: {
+                error: error instanceof Error ? error.message : "Unknown error consuming media",
+                details: {
+                  roomId: consumeRoomId,
+                  userId: consumeUserId,
+                  transportId: consumeTransportId,
+                  producerId
+                }
+              }
+            });
           }
           break;
 

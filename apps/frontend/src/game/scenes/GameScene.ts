@@ -14,7 +14,7 @@ export default class GameScene extends Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private users!: Map<string, UserData>;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private rtcClient: RTCClient;
+  private rtcClient: RTCClient | null = null;
 
   constructor() {
     super("GameScene");
@@ -129,11 +129,16 @@ export default class GameScene extends Scene {
 
   private setupRTCEventListeners() {
     // Listen for custom events from Areana component
-    window.addEventListener('start-call', (e: Event) => {
+    window.addEventListener('start-call', async (e: Event) => {
       const event = e as CustomEvent;
       const { token, spaceId } = event.detail;
       if (this.rtcClient && token && spaceId) {
-        this.rtcClient.startCall(token, spaceId);
+        try {
+          console.log("[GameScene] Starting call with token:", token);
+          this.rtcClient.startCall(token, spaceId);
+        } catch (error) {
+          console.error("[GameScene] Error starting call:", error);
+        }
       }
     });
 
@@ -141,15 +146,21 @@ export default class GameScene extends Scene {
       const event = e as CustomEvent;
       const { token } = event.detail;
       if (this.rtcClient && token) {
+        console.log("[GameScene] Ending call with token:", token);
         this.rtcClient.endCall(token);
       }
     });
 
-    window.addEventListener('accept-call', (e: Event) => {
+    window.addEventListener('accept-call', async (e: Event) => {
       const event = e as CustomEvent;
       const { token, callerId } = event.detail;
       if (this.rtcClient && token && callerId) {
-        this.rtcClient.acceptCall(token, callerId);
+        try {
+          console.log("[GameScene] Accepting call from:", callerId);
+          this.rtcClient.acceptCall(token, callerId);
+        } catch (error) {
+          console.error("[GameScene] Error accepting call:", error);
+        }
       }
     });
 
@@ -157,31 +168,30 @@ export default class GameScene extends Scene {
       const event = e as CustomEvent;
       const { token, callerId } = event.detail;
       if (this.rtcClient && token && callerId) {
+        console.log("[GameScene] Declining call from:", callerId);
         this.rtcClient.declineCall(token, callerId);
       }
     });
 
-    window.addEventListener('produce-tracks', (e: Event) => {
-      console.log(`Inside produce tracks`)
+    window.addEventListener('produce-tracks', async (e: Event) => {
+      console.log("[GameScene] Producing tracks");
       const event = e as CustomEvent;
       const { audioTrack, videoTrack } = event.detail;
       
       if (this.rtcClient) {
-        if (audioTrack) {
-          this.rtcClient.produce(audioTrack)
-            .catch(error => console.error("Error producing audio:", error));
-        } else {
-          console.log(`Something wrong with audioTrack :- ${audioTrack}`);
+        try {
+          if (audioTrack) {
+            console.log("[GameScene] Producing audio track");
+            await this.rtcClient.produce(audioTrack);
+          }
+          
+          if (videoTrack) {
+            console.log("[GameScene] Producing video track");
+            await this.rtcClient.produce(videoTrack);
+          }
+        } catch (error) {
+          console.error("[GameScene] Error producing tracks:", error);
         }
-        //console.log(`audioTrack produced successfully`)
-        
-        if (videoTrack) {
-          this.rtcClient.produce(videoTrack)
-            .catch(error => console.error("Error producing video:", error));
-        } else {
-          console.log(`Something wrong with videoTrack :- ${videoTrack}`);
-        }
-        //console.log(`videoTrack produced successfully`)
       }
     });
   }
